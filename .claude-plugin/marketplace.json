@@ -1,0 +1,15 @@
+{
+  "name": "randkit",
+  "version": "1.0.0",
+  "owner": {
+    "name": "vlasky"
+  },
+  "plugins": [
+    {
+      "name": "randkit",
+      "source": "./",
+      "description": "Teach Claude Code and agentic tools to correctly perform tasks involving randomness",
+      "category": "utilities"
+    }
+  ]
+}

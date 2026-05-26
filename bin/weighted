@@ -1,0 +1,109 @@
+#!/bin/bash
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+    cat <<'EOF'
+usage: weighted [-h] [-c COUNT] ITEM:WEIGHT [ITEM:WEIGHT ...]
+
+Pick a random item from a weighted list. Items with higher weights are
+proportionally more likely to be chosen. Weights can be any positive
+numbers (integers or decimals); they don't need to sum to 1.
+
+positional arguments:
+  ITEM:WEIGHT   Items with their weights (e.g., "red:0.7 blue:0.2 green:0.1")
+
+options:
+  -h, --help    show this help message and exit
+  -c, --count COUNT
+                Number of samples to output, one per line (default: 1)
+
+Output:
+  One selected item per line (just the item name, not the weight).
+  Each pick is independent (with replacement).
+
+Examples:
+  weighted red:0.7 blue:0.2 green:0.1       # red 70% of the time
+  weighted -c 10 heads:1 tails:3            # biased coin, tails 3x more likely
+  weighted "option A:5" "option B:3" "option C:2"  # spaces in names ok with quotes
+  weighted yes:9 no:1                       # 90/10 split
+EOF
+    exit 0
+fi
+
+count=1
+if [[ "$1" == "-c" || "$1" == "--count" ]]; then
+    count=$2
+    shift 2 || shift   # bash 3.2: shift 2 is a no-op when only the flag remains
+fi
+
+# Cap at 18 digits so the value stays within signed 64-bit range (a larger
+# count would wrap and silently produce the wrong number of samples).
+if ! [[ "$count" =~ ^[1-9][0-9]{0,17}$ ]]; then
+    echo "Error: count must be a positive integer (got '$count')" >&2
+    exit 1
+fi
+
+if (( $# == 0 )); then
+    echo "usage: weighted [-h] [-c COUNT] ITEM:WEIGHT [ITEM:WEIGHT ...]" >&2
+    exit 1
+fi
+
+# Parse items and weights
+# Matches a finite decimal number only — rejects inf/nan/infinity and malformed
+# strings (awk's numeric coercion treats "inf" as a value on some platforms).
+num_re='^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$'
+items=()
+weights=()
+for arg in "$@"; do
+    # Split on last colon (allows colons in item names)
+    weight="${arg##*:}"
+    item="${arg%:*}"
+    if [[ -z "$item" || -z "$weight" ]]; then
+        echo "Error: invalid format '$arg' (expected ITEM:WEIGHT)" >&2
+        exit 1
+    fi
+    # Require a finite, positive number: regex rejects inf/nan/malformed,
+    # awk confirms the value is strictly positive and within double range
+    # (w < 1e308 rejects values that would overflow to inf, e.g. 1e309).
+    if [[ ! "$weight" =~ $num_re ]] || ! awk -v w="$weight" 'BEGIN { exit !(w > 0 && w < 1e308) }'; then
+        echo "Error: weight for '$item' must be a positive finite number (got '$weight')" >&2
+        exit 1
+    fi
+    items+=("$item")
+    weights+=("$weight")
+done
+
+# Reject weight sets whose total overflows to infinity (individual weights are
+# already < 1e308, but their sum can still exceed the double range).
+if ! printf '%s\n' "${weights[@]}" | awk '{ s += $1 } END { exit !(s > 0 && s < 1e308) }'; then
+    echo "Error: total weight overflows the supported numeric range" >&2
+    exit 1
+fi
+
+# Use awk for floating-point cumulative weights and selection
+for (( c = 0; c < count; c++ )); do
+    # Generate a random float in (0, 1) using 8 bytes from urandom
+    raw=$(od -An -tu8 -N8 /dev/urandom | tr -d ' ')
+    # Use awk for the selection
+    printf '%s\n' "${weights[@]}" | awk -v raw="$raw" -v nitems="${#items[@]}" '
+    BEGIN {
+        total = 0
+        u = raw / 18446744073709551616.0
+    }
+    {
+        w[NR] = $1 + 0
+        total += w[NR]
+    }
+    END {
+        cum = 0
+        target = u * total
+        for (i = 1; i <= NR; i++) {
+            cum += w[i]
+            if (target < cum) {
+                print i - 1
+                exit
+            }
+        }
+        print NR - 1
+    }' | while read idx; do
+        echo "${items[$idx]}"
+    done
+done

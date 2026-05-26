@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+import argparse
+import math
+import os
+import struct
+
+
+def uniform():
+    """Uniform random float in (0, 1) from /dev/urandom."""
+    u = struct.unpack('Q', os.urandom(8))[0]
+    return (u + 1) / (2**64 + 1)
+
+
+def geometric_sample(p):
+    """Sample from Geometric(p): number of trials until first success.
+    Uses inverse transform: ceil(ln(U) / ln(1-p))."""
+    if p >= 1.0:
+        return 1
+    u = uniform()
+    return int(math.ceil(math.log(u) / math.log(1 - p)))
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Sample from a geometric distribution. "
+                    "Outputs the number of independent Bernoulli trials needed to get "
+                    "the first success. Output is a positive integer (minimum 1). "
+                    "The expected value is 1/p.",
+        epilog="Examples:\n"
+               "  geometric                    # Geometric(0.5), expected value 2\n"
+               "  geometric --p 0.1            # Geometric(0.1), expected value 10\n"
+               "  geometric --p 0.01 -c 5      # 5 samples, expected value 100\n"
+               "  geometric --p 0.5 -c 20      # 20 samples, like counting coin flips to heads\n",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--p", type=float, default=0.5,
+                        help="Probability of success on each trial, between 0 (exclusive) and 1 (inclusive) (default: 0.5)")
+    parser.add_argument("-c", "--count", type=int, default=1,
+                        help="Number of samples to output, one per line (default: 1)")
+
+    args = parser.parse_args()
+
+    if args.count < 1:
+        parser.error("count must be a positive integer")
+    if not 0 < args.p <= 1:
+        parser.error("p must be between 0 (exclusive) and 1 (inclusive)")
+
+    for _ in range(args.count):
+        print(geometric_sample(args.p))
+
+
+if __name__ == "__main__":
+    main()

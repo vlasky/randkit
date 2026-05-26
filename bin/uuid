@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+import argparse
+import os
+import time
+
+
+UUID_EPOCH_OFFSET = 0x01B21DD213814000  # 100-ns intervals from 1582-10-15 to 1970-01-01
+
+
+def uuid4():
+    """Generate a random UUID v4."""
+    b = bytearray(os.urandom(16))
+    b[6] = (b[6] & 0x0F) | 0x40  # version 4
+    b[8] = (b[8] & 0x3F) | 0x80  # variant 10xx
+    return format_uuid(b)
+
+
+def uuid6():
+    """Generate a time-ordered UUID v6 (RFC 9562)."""
+    # 60-bit timestamp: 100-ns intervals since UUID epoch (1582-10-15)
+    ns = time.time_ns()
+    ts = ns // 100 + UUID_EPOCH_OFFSET
+
+    # 14-bit clock sequence and 48-bit node (random)
+    rand = os.urandom(8)
+    clock_seq = int.from_bytes(rand[:2], 'big') & 0x3FFF
+    node = rand[2:]
+
+    # Pack into 16 bytes with v6 bit layout:
+    # time_high (32 bits) | time_mid (16 bits) | version (4) + time_low (12 bits) |
+    # variant (2) + clock_seq (14 bits) | node (48 bits)
+    time_high = (ts >> 28) & 0xFFFFFFFF
+    time_mid = (ts >> 12) & 0xFFFF
+    time_low = ts & 0x0FFF
+
+    b = bytearray(16)
+    b[0:4] = time_high.to_bytes(4, 'big')
+    b[4:6] = time_mid.to_bytes(2, 'big')
+    b[6:8] = ((0x6000) | time_low).to_bytes(2, 'big')  # version 6
+    b[8:10] = ((0x8000) | clock_seq).to_bytes(2, 'big')  # variant 10xx
+    b[10:16] = node
+
+    return format_uuid(b)
+
+
+def uuid7():
+    """Generate a time-ordered UUID v7 (RFC 9562)."""
+    # 48-bit Unix timestamp in milliseconds + 74 random bits
+    ms = int(time.time() * 1000)
+
+    b = bytearray(16)
+    # Bytes 0-5: 48-bit ms timestamp (big-endian)
+    b[0:6] = ms.to_bytes(6, 'big')
+    # Bytes 6-15: random
+    rand = os.urandom(10)
+    b[6:16] = rand
+    # Set version 7: top nibble of byte 6
+    b[6] = (b[6] & 0x0F) | 0x70
+    # Set variant 10xx: top 2 bits of byte 8
+    b[8] = (b[8] & 0x3F) | 0x80
+
+    return format_uuid(b)
+
+
+def format_uuid(b):
+    """Format 16 bytes as UUID string: 8-4-4-4-12."""
+    h = b.hex()
+    return f"{h[0:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}"
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Generate UUIDs (Universally Unique Identifiers). "
+                    "Outputs one UUID per line in standard 8-4-4-4-12 hex format. "
+                    "All randomness sourced from /dev/urandom.",
+        epilog="Versions:\n"
+               "  4  Random UUID. 122 random bits. No time component. (default)\n"
+               "  6  Time-ordered UUID (RFC 9562). 60-bit timestamp (100ns precision)\n"
+               "     with 14-bit clock sequence and 48-bit random node. Sorts\n"
+               "     lexicographically by creation time.\n"
+               "  7  Time-ordered UUID (RFC 9562). 48-bit millisecond timestamp\n"
+               "     with 74 random bits. Simpler than v6, sorts lexicographically.\n"
+               "     Preferred for new applications needing time-sortable UUIDs.\n"
+               "\n"
+               "Examples:\n"
+               "  uuid                   # one UUID v4\n"
+               "  uuid -c 5              # five UUID v4s\n"
+               "  uuid --version 6       # one UUID v6 (time-ordered, 100ns)\n"
+               "  uuid --version 7       # one UUID v7 (time-ordered, ms)\n"
+               "  uuid --version 7 -c 10 # ten UUID v7s\n",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--version", type=int, choices=[4, 6, 7], default=4,
+                        help="UUID version to generate (default: 4)")
+    parser.add_argument("-c", "--count", type=int, default=1,
+                        help="Number of UUIDs to output, one per line (default: 1)")
+
+    args = parser.parse_args()
+
+    if args.count < 1:
+        parser.error("count must be a positive integer")
+
+    gen = {4: uuid4, 6: uuid6, 7: uuid7}[args.version]
+
+    for _ in range(args.count):
+        print(gen())
+
+
+if __name__ == "__main__":
+    main()

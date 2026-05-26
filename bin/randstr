@@ -1,0 +1,127 @@
+#!/bin/bash
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+    cat <<'EOF'
+usage: randstr [-h] [-c COUNT] [-a ALPHABET] [LENGTH]
+
+Generate a random string of specified length from a character alphabet.
+Each character is chosen uniformly and independently using rejection sampling.
+
+positional arguments:
+  LENGTH        Length of string to generate (default: 16)
+
+options:
+  -h, --help    show this help message and exit
+  -c, --count COUNT
+                Number of strings to output, one per line (default: 1)
+  -a ALPHABET   Character set to use (default: alphanumeric)
+                Built-in alphabets:
+                  alnum     a-z, A-Z, 0-9 (62 chars)
+                  alpha     a-z, A-Z (52 chars)
+                  lower     a-z (26 chars)
+                  upper     A-Z (26 chars)
+                  digit     0-9 (10 chars)
+                  hex       0-9, a-f (16 chars)
+                  HEX       0-9, A-F (16 chars)
+                  base32    A-Z, 2-7 (32 chars, RFC 4648)
+                  crockford 0-9, A-Z minus I/L/O/U (32 chars, Crockford's Base32)
+                  zbase32   human-oriented lowercase (32 chars, z-base-32)
+                  base58    Bitcoin alphabet — no 0/O/I/l (58 chars)
+                  base64    a-z, A-Z, 0-9, +, / (64 chars)
+                  symbol    printable ASCII 33-126 (94 chars)
+                Or provide a custom string of characters (e.g., "abc123")
+
+Output:
+  One random string per line.
+
+Examples:
+  randstr                    # 16-char alphanumeric string
+  randstr 32                 # 32-char alphanumeric string
+  randstr -a hex 64          # 64-char hex string
+  randstr -a digit 6         # 6-digit PIN
+  randstr -a symbol 20       # 20-char password with symbols
+  randstr -c 5 8             # 5 random 8-char strings
+  randstr -a base58 32        # 32-char Base58 token
+  randstr -a crockford 26     # 26-char Crockford Base32
+  randstr -a "01" 8           # 8-char binary string
+EOF
+    exit 0
+fi
+
+count=1
+alphabet="alnum"
+length=16
+length_set=0
+
+while (( $# > 0 )); do
+    case "$1" in
+        # `shift 2 || shift` guarantees progress: in bash 3.2 `shift 2` is a
+        # no-op when only the flag remains, which would otherwise loop forever.
+        -c|--count) count=$2; shift 2 || shift ;;
+        -a) alphabet=$2; shift 2 || shift ;;
+        *)
+            if (( length_set )); then
+                echo "Error: unexpected argument '$1'" >&2
+                exit 1
+            fi
+            length=$1; length_set=1; shift ;;
+    esac
+done
+
+# Cap at 18 digits so values stay within signed 64-bit range.
+if ! [[ "$count" =~ ^[1-9][0-9]{0,17}$ ]]; then
+    echo "Error: count must be a positive integer (got '$count')" >&2
+    exit 1
+fi
+if ! [[ "$length" =~ ^[1-9][0-9]{0,17}$ ]]; then
+    echo "Error: LENGTH must be a positive integer (got '$length')" >&2
+    exit 1
+fi
+
+# Resolve built-in alphabets
+case "$alphabet" in
+    alnum)  chars="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" ;;
+    alpha)  chars="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" ;;
+    lower)  chars="abcdefghijklmnopqrstuvwxyz" ;;
+    upper)  chars="ABCDEFGHIJKLMNOPQRSTUVWXYZ" ;;
+    digit)  chars="0123456789" ;;
+    hex)    chars="0123456789abcdef" ;;
+    HEX)    chars="0123456789ABCDEF" ;;
+    base32) chars="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567" ;;
+    crockford) chars="0123456789ABCDEFGHJKMNPQRSTVWXYZ" ;;
+    zbase32) chars="ybndrfg8ejkmcpqxot1uwisza345h769" ;;
+    base58) chars="123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz" ;;
+    base64) chars="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/" ;;
+    symbol) chars='!"#$%&'"'"'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~' ;;
+    *)      chars="$alphabet" ;;
+esac
+
+charset_len=${#chars}
+
+if (( charset_len == 0 )); then
+    echo "Error: empty alphabet" >&2
+    exit 1
+fi
+
+if (( charset_len <= 256 )); then
+    nbytes=1; cap=256
+else
+    echo "Error: alphabet too large (max 256 chars)" >&2
+    exit 1
+fi
+
+threshold=$(( cap - cap % charset_len ))
+
+for (( c = 0; c < count; c++ )); do
+    result=""
+    for (( i = 0; i < length; i++ )); do
+        while :; do
+            val=$(od -An -tu1 -N1 /dev/urandom | tr -d ' ')
+            if (( val < threshold )); then
+                idx=$(( val % charset_len ))
+                result+="${chars:$idx:1}"
+                break
+            fi
+        done
+    done
+    echo "$result"
+done

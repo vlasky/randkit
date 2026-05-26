@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+import argparse
+import os
+import time
+
+CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+
+def encode_crockford(value, length):
+    """Encode an integer as Crockford's Base32 with fixed length."""
+    result = []
+    for _ in range(length):
+        result.append(CROCKFORD[value & 0x1F])
+        value >>= 5
+    return ''.join(reversed(result))
+
+
+def ulid_random():
+    """Generate a ULID with fully random lower 80 bits."""
+    ms = int(time.time() * 1000)
+    rand = int.from_bytes(os.urandom(10), 'big')
+    # ULID = 48-bit timestamp (ms) || 80-bit random
+    # Encode as 26 chars of Crockford Base32:
+    #   timestamp = 10 chars (48 bits), randomness = 16 chars (80 bits)
+    ts_part = encode_crockford(ms, 10)
+    rand_part = encode_crockford(rand, 16)
+    return ts_part + rand_part
+
+
+def ulid_monotonic(last_ulid):
+    """Generate a monotonic ULID.
+    If same millisecond as last ULID, increment the random part by 1.
+    Otherwise, generate fresh randomness."""
+    ms = int(time.time() * 1000)
+
+    if last_ulid is not None:
+        last_ms = decode_crockford(last_ulid[:10])
+        if ms == last_ms:
+            last_rand = decode_crockford(last_ulid[10:])
+            rand = last_rand + 1
+            if rand >= (1 << 80):
+                # Overflow: wait for next millisecond
+                while int(time.time() * 1000) == ms:
+                    pass
+                ms = int(time.time() * 1000)
+                rand = int.from_bytes(os.urandom(10), 'big')
+        else:
+            rand = int.from_bytes(os.urandom(10), 'big')
+    else:
+        rand = int.from_bytes(os.urandom(10), 'big')
+
+    ts_part = encode_crockford(ms, 10)
+    rand_part = encode_crockford(rand, 16)
+    return ts_part + rand_part
+
+
+def decode_crockford(s):
+    """Decode a Crockford Base32 string to integer."""
+    value = 0
+    for ch in s:
+        value = (value << 5) | CROCKFORD.index(ch)
+    return value
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Generate ULIDs (Universally Unique Lexicographically Sortable Identifiers). "
+                    "Outputs one ULID per line as 26 characters of Crockford's Base32. "
+                    "A ULID encodes a 48-bit millisecond timestamp and 80 bits of randomness, "
+                    "so they sort chronologically by creation time.",
+        epilog="Modes:\n"
+               "  Default:    Each ULID gets a fresh 80-bit random component.\n"
+               "  Monotonic:  Within the same millisecond, the random component is\n"
+               "              incremented (not re-randomized), guaranteeing strict\n"
+               "              sort order even for ULIDs generated in the same ms.\n"
+               "\n"
+               "Examples:\n"
+               "  ulid                   # one ULID\n"
+               "  ulid -c 5              # five ULIDs\n"
+               "  ulid --monotonic -c 10 # ten monotonically ordered ULIDs\n",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("-c", "--count", type=int, default=1,
+                        help="Number of ULIDs to output, one per line (default: 1)")
+    parser.add_argument("--monotonic", action="store_true",
+                        help="Generate monotonically increasing ULIDs (increment random "
+                             "part within same millisecond instead of re-randomizing)")
+
+    args = parser.parse_args()
+
+    if args.count < 1:
+        parser.error("count must be a positive integer")
+
+    if args.monotonic:
+        last = None
+        for _ in range(args.count):
+            last = ulid_monotonic(last)
+            print(last)
+    else:
+        for _ in range(args.count):
+            print(ulid_random())
+
+
+if __name__ == "__main__":
+    main()

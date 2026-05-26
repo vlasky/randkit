@@ -1,0 +1,9 @@
+{
+  "name": "randkit",
+  "description": "Teach Claude Code and agentic tools to correctly perform tasks involving randomness",
+  "version": "1.0.0",
+  "author": {
+    "name": "vlasky"
+  },
+  "skills": ["./skills/random"]
+}

@@ -1,0 +1,46 @@
+#!/bin/bash
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+    cat <<'EOF'
+usage: cointoss [-h] [-c COUNT]
+
+Simulate a fair coin toss. Outputs either "Heads" or "Tails" (one line).
+Each outcome has exactly 50% probability.
+
+options:
+  -h, --help  show this help message and exit
+  -c, --count COUNT
+              Number of flips to output, one per line (default: 1)
+
+Examples:
+  cointoss         # prints "Heads" or "Tails"
+  cointoss -c 10   # 10 coin flips
+EOF
+    exit 0
+fi
+
+count=1
+if [[ "$1" == "-c" || "$1" == "--count" ]]; then
+    count=$2
+    shift 2 || shift   # bash 3.2: shift 2 is a no-op when only the flag remains
+fi
+
+if (( $# > 0 )); then
+    echo "Error: unexpected argument '$1'" >&2
+    exit 1
+fi
+
+# Cap at 18 digits so the value stays within signed 64-bit range (a larger
+# count would wrap and silently produce the wrong number of samples).
+if ! [[ "$count" =~ ^[1-9][0-9]{0,17}$ ]]; then
+    echo "Error: count must be a positive integer (got '$count')" >&2
+    exit 1
+fi
+
+for (( c = 0; c < count; c++ )); do
+    byte=$(od -An -tu1 -N1 /dev/urandom | tr -d ' ')
+    if (( byte % 2 == 0 )); then
+        echo "Heads"
+    else
+        echo "Tails"
+    fi
+done

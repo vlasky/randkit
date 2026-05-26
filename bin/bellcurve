@@ -1,0 +1,426 @@
+#!/usr/bin/env python3
+import argparse
+import math
+import os
+import struct
+import sys
+from decimal import Decimal, getcontext, localcontext
+
+getcontext().prec = 50
+
+
+def uniform():
+    """Uniform random Decimal in (0, 1) from /dev/urandom with 50 digits of precision."""
+    # Read 21 bytes (168 bits) for plenty of entropy beyond 50 decimal digits
+    raw = int.from_bytes(os.urandom(21), 'big')
+    # Map to (0, 1) as a Decimal
+    cap = 2 ** 168
+    return (Decimal(raw) + 1) / (Decimal(cap) + 1)
+
+
+def uniform_float():
+    """Uniform random float in (0, 1) from /dev/urandom."""
+    u = struct.unpack('Q', os.urandom(8))[0]
+    return (u + 1) / (2**64 + 1)
+
+
+def normal_sample_float(mean, std):
+    """Box-Muller transform (float, for full-distribution sampling)."""
+    import math
+    r1, r2 = uniform_float(), uniform_float()
+    z = math.sqrt(-2 * math.log(r1)) * math.cos(2 * math.pi * r2)
+    return mean + std * z
+
+
+def dec_sqrt(x):
+    """Arbitrary-precision square root via Newton's method."""
+    if x < 0:
+        raise ValueError("sqrt of negative")
+    if x == 0:
+        return Decimal(0)
+    # Initial guess
+    guess = Decimal(x.sqrt())
+    for _ in range(5):
+        guess = (guess + x / guess) / 2
+    return guess
+
+
+def dec_pi():
+    """Pi to current precision via Machin's formula."""
+    with localcontext() as ctx:
+        ctx.prec += 10
+        one = Decimal(1)
+        # pi/4 = 4*arctan(1/5) - arctan(1/239)
+        pi = 4 * (4 * _dec_atan(one / 5) - _dec_atan(one / 239))
+    return +pi
+
+
+def _dec_atan(x):
+    """Arctan via Taylor series for |x| <= 1."""
+    power = x
+    result = x
+    x2 = x * x
+    k = 1
+    while True:
+        power *= -x2
+        k += 2
+        term = power / k
+        if abs(term) < Decimal(10) ** (-(getcontext().prec + 5)):
+            break
+        result += term
+    return result
+
+
+def dec_ln(x):
+    """Natural log for arbitrary precision. Decomposes input to avoid precision loss."""
+    if x <= 0:
+        raise ValueError("ln of non-positive")
+    with localcontext() as ctx:
+        ctx.prec += 20
+        # Decompose: write x = mantissa * 10^exponent where 1 <= mantissa < 10
+        # Then ln(x) = ln(mantissa) + exponent * ln(10)
+        # This avoids catastrophic cancellation in the AGM for very small/large x
+        sign, digits, exponent = x.as_tuple()
+        # Reconstruct mantissa: digits as 0.digits * 10^len(digits), adjusted
+        n_digits = len(digits)
+        # x = int(digits) * 10^exponent, and int(digits) has n_digits digits
+        # So x = (int(digits) / 10^(n_digits-1)) * 10^(exponent + n_digits - 1)
+        int_digits = int(''.join(str(d) for d in digits))
+        mantissa = Decimal(int_digits) / Decimal(10) ** (n_digits - 1)
+        exp10 = exponent + n_digits - 1
+
+        # Compute ln(mantissa) via AGM — mantissa is in [1, 10)
+        ln_mantissa = _dec_ln_agm(mantissa)
+        # ln(10) via AGM
+        ln10 = _dec_ln_agm(Decimal(10))
+
+        result = ln_mantissa + Decimal(exp10) * ln10
+    return +result
+
+
+def _dec_ln_agm(x):
+    """Natural log via AGM, assuming x is in a reasonable range (not extreme)."""
+    with localcontext() as ctx:
+        ctx.prec += 10
+        m = ctx.prec
+        s = x * Decimal(2) ** m
+        a = Decimal(1)
+        b = Decimal(4) / s
+        while True:
+            a_new = (a + b) / 2
+            b_new = dec_sqrt(a * b)
+            if abs(a_new - a) < Decimal(10) ** (-(ctx.prec - 2)):
+                break
+            a, b = a_new, b_new
+        pi = dec_pi()
+        result = pi / (2 * a_new) - m * _dec_ln2()
+    return +result
+
+
+def _dec_ln2():
+    """ln(2) via series: ln(2) = sum(1/(k*2^k), k=1..inf)... use AGM on 2."""
+    # Use the series ln(2) = 1 - 1/2 + 1/3 - 1/4 + ... is too slow.
+    # Use ln(2) = 3*sum + correction via atanh series:
+    # ln(2) = 2*atanh(1/3) + 2*atanh(1/7) + 2*atanh(1/13) ... nope
+    # Simpler: ln(2) = atanh(1/3)*2 via ln((1+x)/(1-x)) = 2*atanh(x), x=1/3 gives ln(2)
+    # Actually ln(2) = 2*atanh(1/3) + ... no. Let's just use the series for atanh.
+    # ln(2) = sum_{k=0}^inf 2/(2k+1) * (1/3)^(2k+1) ... nope
+    # Correct: ln((1+t)/(1-t)) = 2*atanh(t), set (1+t)/(1-t) = 2, t = 1/3
+    # ln(2) = 2*atanh(1/3) = 2 * sum_{k=0}^inf (1/3)^(2k+1)/(2k+1)
+    with localcontext() as ctx:
+        ctx.prec += 10
+        t = Decimal(1) / 3
+        t2 = t * t
+        power = t
+        result = t
+        k = 1
+        while True:
+            power *= t2
+            k += 2
+            term = power / k
+            if abs(term) < Decimal(10) ** (-(ctx.prec - 2)):
+                break
+            result += term
+        return 2 * result
+
+
+def dec_exp(x):
+    """Exponential via Taylor series."""
+    with localcontext() as ctx:
+        ctx.prec += 10
+        # Reduce: e^x = e^(int) * e^(frac), and use repeated squaring for int part
+        # For simplicity, reduce x to small range using e^x = (e^(x/2^r))^(2^r)
+        r = 0
+        term = x
+        while abs(term) > 1:
+            term /= 2
+            r += 1
+        # Taylor series for e^term where |term| <= 1
+        result = Decimal(1)
+        factorial_term = Decimal(1)
+        for k in range(1, ctx.prec * 3):
+            factorial_term *= term / k
+            result += factorial_term
+            if abs(factorial_term) < Decimal(10) ** (-(ctx.prec - 2)):
+                break
+        # Square r times
+        for _ in range(r):
+            result = result * result
+    return +result
+
+
+def dec_erfc(x):
+    """Complementary error function for large x via continued fraction."""
+    with localcontext() as ctx:
+        ctx.prec += 10
+        if x < 0:
+            return 2 - dec_erfc(-x)
+        if x < Decimal('6'):
+            # Use series for erf, then erfc = 1 - erf
+            return 1 - _dec_erf_series(x)
+        # Continued fraction (Lentz's method) for large x
+        # erfc(x) = exp(-x^2)/sqrt(pi) * CF
+        a = x
+        b = x * x
+        # CF: 1/(x + 1/(2x + 2/(x + 3/(2x + ...))))
+        # Use the asymptotic CF representation
+        n_terms = ctx.prec * 2
+        result = Decimal(0)
+        for k in range(n_terms, 0, -1):
+            result = Decimal(k) / 2 / (x + result)
+        result = 1 / (x + result)
+        exp_neg_x2 = dec_exp(-b)
+        sqrt_pi = dec_sqrt(dec_pi())
+        return exp_neg_x2 / sqrt_pi * result
+
+
+def _dec_erf_series(x):
+    """erf(x) via Taylor series: erf(x) = 2/sqrt(pi) * sum(-1)^n * x^(2n+1) / (n! * (2n+1))"""
+    with localcontext() as ctx:
+        ctx.prec += 10
+        two_over_sqrt_pi = 2 / dec_sqrt(dec_pi())
+        x2 = x * x
+        term = x
+        result = x
+        for n in range(1, ctx.prec * 3):
+            term *= -x2 / n
+            contribution = term / (2 * n + 1)
+            result += contribution
+            if abs(contribution) < Decimal(10) ** (-(ctx.prec - 2)):
+                break
+        return two_over_sqrt_pi * result
+
+
+def dec_normal_cdf(x):
+    """Normal CDF at x using erfc for precision in tails."""
+    if x < 0:
+        return dec_erfc(-x / dec_sqrt(Decimal(2))) / 2
+    else:
+        return 1 - dec_erfc(x / dec_sqrt(Decimal(2))) / 2
+
+
+def dec_normal_pdf(x):
+    """Normal PDF at x."""
+    two_pi = 2 * dec_pi()
+    return dec_exp(-x * x / 2) / dec_sqrt(two_pi)
+
+
+def inv_normal_cdf_decimal(p):
+    """Inverse CDF of standard normal to arbitrary precision using Decimal.
+    Uses an asymptotic initial guess refined by Newton-Raphson with arbitrary-precision
+    erfc/erf."""
+    if p >= Decimal('0.5'):
+        return -inv_normal_cdf_decimal(1 - p)
+
+    # For small p: initial guess from asymptotic expansion
+    # Phi^{-1}(p) ~ -sqrt(2 * ln(1/(p*sqrt(2*pi))))
+    # More precisely: x ~ -sqrt(-2*ln(p) - ln(2*pi) - ln(-2*ln(p) - ln(2*pi)))
+    # Simple version: x ~ -sqrt(-2 * ln(p * sqrt(2*pi)))
+    two_pi = 2 * dec_pi()
+    ln_p = dec_ln(p)
+    # First approximation: x = -sqrt(-2*ln(p) - ln(2*pi))
+    inner = -2 * ln_p - dec_ln(two_pi)
+    x = -dec_sqrt(inner)
+
+    # Newton-Raphson refinement
+    for _ in range(10):
+        cdf_x = dec_normal_cdf(x)
+        pdf_x = dec_normal_pdf(x)
+        if pdf_x == 0:
+            break
+        err = cdf_x - p
+        correction = err / pdf_x
+        x -= correction
+        if abs(correction) < Decimal(10) ** (-(getcontext().prec - 5)):
+            break
+
+    return x
+
+
+def uniform_in_range(lo, hi):
+    """Uniform random Decimal in (lo, hi) with full precision relative to the range width."""
+    width = hi - lo
+    if width <= 0:
+        return lo
+    # Determine how many digits of entropy we need based on range magnitude
+    prec = getcontext().prec
+    # Generate enough random bits to cover the precision
+    n_bytes = (prec * 4) // 8 + 10  # ~3.32 bits per decimal digit, plus margin
+    raw = int.from_bytes(os.urandom(n_bytes), 'big')
+    cap = 2 ** (n_bytes * 8)
+    # u in (0, 1) with full precision
+    u = (Decimal(raw) + 1) / (Decimal(cap) + 1)
+    return lo + width * u
+
+
+def sample_tail(mean, std, left_mass, right_mass):
+    """Sample from the tail region given the left and right tail probability masses.
+
+    Both masses are small numbers near 0, computed directly (never as 1 - x) so
+    that extreme right tails are not rounded away at finite Decimal precision.
+    The left tail covers CDF (0, left_mass); the right tail covers the symmetric
+    upper mass, sampled via z = -inv_normal_cdf(q) for q in (0, right_mass).
+    """
+    total = left_mass + right_mass
+
+    if total <= 0:
+        print("Error: tail region is empty", file=sys.stderr)
+        sys.exit(1)
+
+    # Decide which tail to sample from
+    u_choice = uniform()
+    if u_choice < left_mass / total:
+        # Left tail: p in (0, left_mass)
+        p = uniform_in_range(Decimal(0), left_mass)
+        # Ensure p > 0
+        if p <= 0:
+            p = Decimal(10) ** (-(getcontext().prec - 1))
+        z = inv_normal_cdf_decimal(p)
+    else:
+        # Right tail: sample q in (0, right_mass) then z = -inv_normal_cdf(q)
+        q = uniform_in_range(Decimal(0), right_mass)
+        if q <= 0:
+            q = Decimal(10) ** (-(getcontext().prec - 1))
+        z = -inv_normal_cdf_decimal(q)
+
+    return mean + std * z
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Sample from a continuous normal (Gaussian) distribution. "
+                    "Outputs one floating-point number per line. "
+                    "Without tail options, samples from the full distribution. "
+                    "With tail options, samples only from the extreme values.",
+        epilog="Algorithm:\n"
+               "  Full distribution: Box-Muller transform with 64-bit entropy (double precision).\n"
+               "  Tail sampling: Inverse CDF method using Python's Decimal module for\n"
+               "  arbitrary-precision arithmetic (50 significant digits). The inverse CDF\n"
+               "  uses an asymptotic initial guess refined by Newton-Raphson, with\n"
+               "  arbitrary-precision erf/erfc, exp, and ln (via AGM).\n"
+               "\n"
+               "Precision:\n"
+               "  Full distribution output: 15 significant digits (IEEE 754 double).\n"
+               "  Tail sampling output: up to 50 significant digits.\n"
+               "  Tail percentages as small as 1e-300 are supported (corresponding to ~37σ).\n"
+               "  Entropy source: /dev/urandom (168 bits per sample in tail mode).\n"
+               "\n"
+               "Examples:\n"
+               "  bellcurve                            # One sample from N(0,1)\n"
+               "  bellcurve --mean 100 --std 15 -n 5   # 5 samples from N(100,15)\n"
+               "  bellcurve --tail-sigma 2 --right     # Sample from right tail beyond +2σ\n"
+               "  bellcurve --tail-pct 5               # Sample from outer 5%% of distribution\n"
+               "  bellcurve --tail-pct 1e-100          # Extreme tail (~22σ)\n"
+               "  bellcurve --tail-above 120 --mean 100 --std 15  # Sample above 120\n",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--mean", type=float, default=0.0,
+                        help="Center of the distribution (default: 0)")
+    parser.add_argument("--std", type=float, default=1.0,
+                        help="Standard deviation / spread (default: 1)")
+
+    tail_group = parser.add_mutually_exclusive_group()
+    tail_group.add_argument("--tail-sigma", type=float, metavar="K",
+                            help="Sample from beyond ±K standard deviations from the mean")
+    tail_group.add_argument("--tail-pct", type=str, metavar="P",
+                            help="Sample from the outer P%% of the distribution (e.g. 5 = most extreme 5%%; supports very small values like 1e-300)")
+    tail_group.add_argument("--tail-above", type=float, metavar="X",
+                            help="Sample only values greater than X")
+    tail_group.add_argument("--tail-below", type=float, metavar="X",
+                            help="Sample only values less than X")
+
+    side_group = parser.add_mutually_exclusive_group()
+    side_group.add_argument("--left", action="store_true",
+                            help="Restrict to left (low) tail only; combine with --tail-sigma or --tail-pct")
+    side_group.add_argument("--right", action="store_true",
+                            help="Restrict to right (high) tail only; combine with --tail-sigma or --tail-pct")
+
+    parser.add_argument("-n", type=int, default=1,
+                        help="Number of samples to output, one per line (default: 1)")
+
+    args = parser.parse_args()
+
+    if args.n < 1:
+        parser.error("-n must be a positive integer")
+    if not math.isfinite(args.mean):
+        parser.error("--mean must be a finite number")
+    if not math.isfinite(args.std) or args.std <= 0:
+        parser.error("--std must be a positive finite number")
+
+    use_tail = (args.tail_sigma is not None or args.tail_pct is not None
+                or args.tail_above is not None or args.tail_below is not None)
+
+    if not use_tail:
+        for _ in range(args.n):
+            print(f"{normal_sample_float(args.mean, args.std):.15g}")
+        return
+
+    mean = Decimal(str(args.mean))
+    std = Decimal(str(args.std))
+
+    # Compute the left and right tail probability masses directly (each near 0).
+    # We never form 1 - (a value near 1), so extreme right tails keep full
+    # precision instead of rounding to zero.
+    if args.tail_sigma is not None:
+        if not math.isfinite(args.tail_sigma) or args.tail_sigma <= 0:
+            parser.error("--tail-sigma must be a positive finite number")
+        sigma = Decimal(str(args.tail_sigma))
+        left_mass = dec_normal_cdf(-sigma)
+        right_mass = left_mass  # symmetric tails
+    elif args.tail_pct is not None:
+        try:
+            pct = Decimal(args.tail_pct)
+        except (ArithmeticError, ValueError):
+            parser.error(f"--tail-pct must be a number (got '{args.tail_pct}')")
+        if not pct.is_finite() or not (0 < pct < 100):
+            parser.error("--tail-pct must be a finite number between 0 and 100 (exclusive)")
+        half = pct / 200
+        left_mass = half
+        right_mass = half
+    elif args.tail_above is not None:
+        if not math.isfinite(args.tail_above):
+            parser.error("--tail-above must be a finite number")
+        z = (Decimal(str(args.tail_above)) - mean) / std
+        left_mass = Decimal(0)
+        right_mass = dec_normal_cdf(-z)  # P(value > X)
+    elif args.tail_below is not None:
+        if not math.isfinite(args.tail_below):
+            parser.error("--tail-below must be a finite number")
+        z = (Decimal(str(args.tail_below)) - mean) / std
+        left_mass = dec_normal_cdf(z)    # P(value < X)
+        right_mass = Decimal(0)
+
+    # Apply --left / --right
+    if args.left:
+        right_mass = Decimal(0)
+    elif args.right:
+        left_mass = Decimal(0)
+
+    for _ in range(args.n):
+        result = sample_tail(mean, std, left_mass, right_mass)
+        # Print with enough digits to distinguish samples in extreme tails
+        print(result.normalize())
+
+
+if __name__ == "__main__":
+    main()

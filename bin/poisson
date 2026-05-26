@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+import argparse
+import math
+import os
+import struct
+
+
+def uniform():
+    """Uniform random float in (0, 1) from /dev/urandom."""
+    u = struct.unpack('Q', os.urandom(8))[0]
+    return (u + 1) / (2**64 + 1)
+
+
+def poisson_inversion(lam):
+    """Poisson sampling via inversion (product of uniforms). O(λ) per sample."""
+    L = math.exp(-lam)
+    k = 0
+    p = 1.0
+    while True:
+        k += 1
+        p *= uniform()
+        if p <= L:
+            return k - 1
+
+
+def poisson_rejection(lam):
+    """Poisson sampling via transformed rejection (Hörmann's PTRS). O(1) per sample."""
+    slam = math.sqrt(lam)
+    loglam = math.log(lam)
+    b = 0.931 + 2.53 * slam
+    a = -0.059 + 0.02483 * b
+    inv_alpha = 1.1239 + 1.1328 / (b - 3.4)
+    vr = 0.9277 - 3.6224 / (b - 2)
+
+    while True:
+        u = uniform() - 0.5
+        v = uniform()
+        us = 0.5 - abs(u)
+        k = int(math.floor((2 * a / us + b) * u + lam + 0.43))
+
+        if k < 0:
+            continue
+
+        # Squeeze acceptance
+        if us >= 0.07 and v <= vr:
+            return k
+
+        # Full acceptance check
+        if us < 0.013 and v > us:
+            continue
+
+        if math.log(v) + math.log(inv_alpha) - math.log(a / (us * us) + b) <= \
+                -lam + k * loglam - math.lgamma(k + 1):
+            return k
+
+
+def poisson_sample(lam):
+    """Sample from Poisson(λ), choosing algorithm based on λ."""
+    if lam < 10:
+        return poisson_inversion(lam)
+    return poisson_rejection(lam)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Sample from a Poisson distribution (discrete, non-negative integers). "
+                    "Models the number of events occurring in a fixed interval when events happen "
+                    "at a constant average rate. Output is one non-negative integer per line. "
+                    "The distribution is centered at λ with standard deviation sqrt(λ).",
+        epilog="Algorithm:\n"
+               "  λ < 10: Inversion method (product of uniforms). Exact, O(λ) per sample.\n"
+               "  λ >= 10: Transformed rejection (Hörmann's PTRS). Exact, O(1) per sample.\n"
+               "  Both methods are unbiased. Maximum λ is 2^53 (9007199254740992);\n"
+               "  beyond that float64 cannot represent consecutive integer counts.\n"
+               "  Entropy source: /dev/urandom (64 bits per uniform draw).\n"
+               "\n"
+               "Examples:\n"
+               "  poisson --lambda 3           # One sample, typical range ~0-8\n"
+               "  poisson --lambda 20 -c 5     # 5 samples, typical range ~10-30\n"
+               "  poisson --lambda 0.5         # Rare events, mostly 0s and 1s\n"
+               "  poisson --lambda 100000 -c 3 # Large λ, centered ~100000\n",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--lambda", dest="lam", type=float, required=True,
+                        help="Average rate of events (λ); must be positive. "
+                             "Output will center around this value.")
+    parser.add_argument("-c", "--count", type=int, default=1,
+                        help="Number of samples to output, one per line (default: 1)")
+
+    args = parser.parse_args()
+
+    if args.count < 1:
+        parser.error("count must be a positive integer")
+    if not math.isfinite(args.lam) or args.lam <= 0:
+        parser.error("lambda must be a positive finite number")
+    if args.lam > 2**53:
+        parser.error("lambda must be <= 2^53 (9007199254740992); beyond that "
+                     "float64 cannot represent consecutive integer counts")
+
+    for _ in range(args.count):
+        print(poisson_sample(args.lam))
+
+
+if __name__ == "__main__":
+    main()

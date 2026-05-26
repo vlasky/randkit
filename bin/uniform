@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+import argparse
+import math
+import os
+import struct
+
+
+def uniform_sample(lo, hi):
+    """Uniform random float in (lo, hi) from /dev/urandom."""
+    u = struct.unpack('Q', os.urandom(8))[0]
+    # Map to (0, 1) then scale to (lo, hi)
+    t = (u + 1) / (2**64 + 1)
+    return lo + (hi - lo) * t
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Sample from a continuous uniform distribution over [MIN, MAX]. "
+                    "Outputs one floating-point number per line. "
+                    "Uses 64-bit entropy from /dev/urandom for IEEE 754 double precision.",
+        epilog="Examples:\n"
+               "  uniform                        # One sample from U(0, 1)\n"
+               "  uniform --min 10 --max 20      # One sample from U(10, 20)\n"
+               "  uniform --min -1 --max 1 -c 5  # 5 samples from U(-1, 1)\n",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--min", type=float, default=0.0,
+                        help="Lower bound of the range (default: 0)")
+    parser.add_argument("--max", type=float, default=1.0,
+                        help="Upper bound of the range (default: 1)")
+    parser.add_argument("-c", "--count", type=int, default=1,
+                        help="Number of samples to output, one per line (default: 1)")
+
+    args = parser.parse_args()
+
+    if args.count < 1:
+        parser.error("count must be a positive integer")
+    if not math.isfinite(args.min) or not math.isfinite(args.max):
+        parser.error("MIN and MAX must be finite numbers")
+    if args.min >= args.max:
+        parser.error(f"MIN ({args.min}) must be less than MAX ({args.max})")
+
+    for _ in range(args.count):
+        print(f"{uniform_sample(args.min, args.max):.15g}")
+
+
+if __name__ == "__main__":
+    main()

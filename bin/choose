@@ -1,0 +1,212 @@
+#!/bin/bash
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+    cat <<'EOF'
+usage: choose [-h] [--replace] N [ITEM ...]
+
+Randomly select N items from a list, preserving their original order.
+Items can be provided as command-line arguments or piped via stdin
+(one item per line). If both N and arguments are provided, selects
+from the arguments.
+
+Without --replace: N must be between 1 and the total number of items.
+  Each item can be selected at most once.
+With --replace: N can be any positive integer. Items may repeat.
+  Output order matches selection order (not input order).
+
+positional arguments:
+  N           Number of items to select
+  ITEM        Items to choose from (any strings, numbers, words, etc.)
+
+options:
+  -h, --help  show this help message and exit
+  --replace   Sample with replacement (items may be chosen more than once)
+
+Output:
+  One selected item per line.
+  Without --replace: items appear in their original input order.
+  With --replace: items appear in selection order.
+
+Examples:
+  choose 2 a b c d e              # selects 2 of 5, in original order
+  seq 1 100 | choose 10           # selects 10 of 100 lines, order preserved
+  choose --replace 10 a b c       # 10 picks from 3 items (repeats possible)
+  echo -e "x\ny\nz" | choose 2   # selects 2 of 3 lines
+EOF
+    exit 0
+fi
+
+replace=0
+if [[ "$1" == "--replace" ]]; then
+    replace=1
+    shift
+fi
+
+if (( $# == 0 )); then
+    echo "usage: choose [-h] [--replace] N [ITEM ...]" >&2
+    exit 1
+fi
+
+n=$1
+shift
+
+# Validate N before any bash arithmetic (rejects non-integers, leading-zero
+# octal like "08", non-positive values, and >18-digit values that would wrap
+# signed 64-bit arithmetic — all in one check).
+if ! [[ "$n" =~ ^[1-9][0-9]{0,17}$ ]]; then
+    echo "Error: N must be a positive integer (got '$n')" >&2
+    exit 1
+fi
+
+# --- Fast path: stdin, without replacement.
+# Reservoir sampling in awk, with random bytes streamed from /dev/urandom on
+# FD 3. Avoids loading the entire input into a bash array.
+if (( $# == 0 && replace == 0 )); then
+    exec 3< <(od -An -tu1 -v /dev/urandom)
+    awk -v n="$n" '
+        # Random-byte source: producer writes lines of decimal bytes
+        # separated by whitespace; we buffer one line at a time.
+        function refill_buf(   line) {
+            if ((getline line < "/dev/fd/3") <= 0) {
+                print "choose: /dev/urandom read failed" > "/dev/stderr"
+                exit 2
+            }
+            # split() with " " uses awk whitespace splitting: leading/trailing
+            # whitespace trimmed, runs of whitespace collapsed.
+            buf_n = split(line, buf, " ")
+            buf_i = 0
+        }
+        function rand_byte() {
+            if (buf_i >= buf_n) refill_buf()
+            buf_i++
+            return buf[buf_i] + 0
+        }
+        # Uniform integer in [0, range) via rejection sampling.
+        # Byte width scales with range, matching the rest of randkit.
+        function rand_range(range,   nbytes, cap, thresh, v, i) {
+            if (range <= 256)              { nbytes = 1; cap = 256 }
+            else if (range <= 65536)       { nbytes = 2; cap = 65536 }
+            else                           { nbytes = 4; cap = 4294967296 }
+            thresh = cap - (cap % range)
+            while (1) {
+                v = 0
+                for (i = 0; i < nbytes; i++) v = v * 256 + rand_byte()
+                if (v < thresh) return v % range
+            }
+        }
+        {
+            # Fill reservoir with the first n lines; thereafter, replace
+            # uniformly with probability n/NR (Vitter Algorithm R).
+            if (NR <= n) {
+                line_no[NR-1] = NR
+                text[NR-1]    = $0
+            } else {
+                j = rand_range(NR)
+                if (j < n) {
+                    line_no[j] = NR
+                    text[j]    = $0
+                }
+            }
+        }
+        END {
+            total = NR
+            if (total < n) {
+                printf "Error: N must be between 1 and %d (got %d)\n", total, n > "/dev/stderr"
+                exit 1
+            }
+            # Sort the n reservoir slots by original line number, emit in input order.
+            for (i = 0; i < n; i++) ord[i] = i
+            for (i = 1; i < n; i++) {
+                key  = ord[i]
+                kval = line_no[key]
+                k = i - 1
+                while (k >= 0 && line_no[ord[k]] > kval) {
+                    ord[k+1] = ord[k]
+                    k--
+                }
+                ord[k+1] = key
+            }
+            for (i = 0; i < n; i++) print text[ord[i]]
+        }
+    '
+    exit $?
+fi
+
+if (( $# > 0 )); then
+    items=("$@")
+else
+    # Read stdin lines portably (macOS /bin/bash 3.2 has no `mapfile`).
+    # The `|| [[ -n "$line" ]]` keeps a final line with no trailing newline.
+    items=()
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        items+=("$line")
+    done
+    if (( ${#items[@]} == 0 )); then
+        echo "Error: no items provided" >&2
+        exit 1
+    fi
+fi
+
+total=${#items[@]}
+
+if (( replace == 1 )); then
+    # With replacement: pick N items independently
+    if (( total <= 256 )); then
+        nbytes=1; cap=256
+    elif (( total <= 65536 )); then
+        nbytes=2; cap=65536
+    else
+        nbytes=4; cap=4294967296
+    fi
+    max=$(( cap - cap % total ))
+    for (( i = 0; i < n; i++ )); do
+        while :; do
+            val=$(od -An -tu$nbytes -N$nbytes /dev/urandom | tr -d ' ')
+            if (( val < max )); then
+                break
+            fi
+        done
+        idx=$(( val % total ))
+        echo "${items[$idx]}"
+    done
+else
+    # Without replacement
+    if (( n > total )); then
+        echo "Error: N must be between 1 and $total (got $n)" >&2
+        exit 1
+    fi
+
+    indices=()
+    for (( i = 0; i < total; i++ )); do
+        indices+=($i)
+    done
+
+    selected=()
+    for (( i = 0; i < n; i++ )); do
+        remaining=$(( total - i ))
+        if (( remaining <= 256 )); then
+            nbytes=1; cap=256
+        elif (( remaining <= 65536 )); then
+            nbytes=2; cap=65536
+        else
+            nbytes=4; cap=4294967296
+        fi
+        max=$(( cap - cap % remaining ))
+        while :; do
+            val=$(od -An -tu$nbytes -N$nbytes /dev/urandom | tr -d ' ')
+            if (( val < max )); then
+                break
+            fi
+        done
+        j=$(( i + val % remaining ))
+        tmp=${indices[$i]}
+        indices[$i]=${indices[$j]}
+        indices[$j]=$tmp
+        selected+=(${indices[$i]})
+    done
+
+    IFS=$'\n' sorted=($(printf '%d\n' "${selected[@]}" | sort -n)); unset IFS
+
+    for idx in "${sorted[@]}"; do
+        echo "${items[$idx]}"
+    done
+fi

@@ -1,0 +1,33 @@
+#!/bin/bash
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+    cat <<'EOF'
+usage: diceroll [-h] [-c COUNT]
+
+Roll a fair 6-sided die. Outputs a single integer from 1 to 6 (inclusive).
+Each outcome has exactly 1/6 probability (uses rejection sampling to avoid modulo bias).
+
+options:
+  -h, --help  show this help message and exit
+  -c, --count COUNT
+              Number of rolls to output, one per line (default: 1)
+
+Examples:
+  diceroll         # prints an integer 1-6
+  diceroll -c 10   # 10 dice rolls
+EOF
+    exit 0
+fi
+
+count_args=()
+if [[ "$1" == "-c" || "$1" == "--count" ]]; then
+    count_args=(-c "$2")
+    shift 2 || shift   # bash 3.2: shift 2 is a no-op when only the flag remains
+fi
+
+if (( $# > 0 )); then
+    echo "Error: unexpected argument '$1'" >&2
+    exit 1
+fi
+
+# randint validates the count and emits any error message
+"$(dirname "$0")/randint" "${count_args[@]}" 1 6

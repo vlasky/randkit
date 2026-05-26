@@ -1,0 +1,97 @@
+#!/bin/bash
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+    cat <<'EOF'
+usage: randint [-h] [-c COUNT] MIN MAX
+
+Generate a uniformly random integer in the range [MIN, MAX] (inclusive).
+Uses rejection sampling to avoid modulo bias. Scales byte width to the
+range size (1, 2, or 4 bytes) for efficiency.
+
+positional arguments:
+  MIN         Lower bound (integer)
+  MAX         Upper bound (integer, must be >= MIN)
+
+options:
+  -h, --help  show this help message and exit
+  -c, --count COUNT
+              Number of samples to output, one per line (default: 1)
+
+Output:
+  One integer per line in [MIN, MAX], uniformly distributed.
+  Supports ranges up to 2^32 - 1 (over 4 billion values).
+
+Examples:
+  randint 1 6         # equivalent to diceroll
+  randint 1 100       # random integer 1-100
+  randint -c 10 1 6   # 10 dice rolls
+  randint 0 1         # random bit
+  randint -10 10      # negative ranges work too
+EOF
+    exit 0
+fi
+
+count=1
+if [[ "$1" == "-c" || "$1" == "--count" ]]; then
+    count=$2
+    shift 2 || shift   # bash 3.2: shift 2 is a no-op when only the flag remains
+fi
+
+# Cap at 18 digits so the value stays within signed 64-bit range (a larger
+# count would wrap and silently produce the wrong number of samples).
+if ! [[ "$count" =~ ^[1-9][0-9]{0,17}$ ]]; then
+    echo "Error: count must be a positive integer (got '$count')" >&2
+    exit 1
+fi
+
+if (( $# != 2 )); then
+    echo "usage: randint [-h] [-c COUNT] MIN MAX" >&2
+    exit 1
+fi
+
+min=$1
+max=$2
+
+# Accept 0 or a sign + non-zero leading digit, max 18 digits. Disallowing
+# leading zeros avoids bash treating "08" as invalid octal; the 18-digit cap
+# keeps MAX-MIN within signed 64-bit range so the arithmetic below can't wrap.
+int_re='^-?(0|[1-9][0-9]{0,17})$'
+if ! [[ "$min" =~ $int_re ]]; then
+    echo "Error: MIN must be an integer with no leading zeros and at most 18 digits (got '$min')" >&2
+    exit 1
+fi
+if ! [[ "$max" =~ $int_re ]]; then
+    echo "Error: MAX must be an integer with no leading zeros and at most 18 digits (got '$max')" >&2
+    exit 1
+fi
+
+if (( min > max )); then
+    echo "Error: MIN ($min) must be <= MAX ($max)" >&2
+    exit 1
+fi
+
+range=$(( max - min + 1 ))
+
+if (( range > 4294967296 )); then
+    echo "Error: range size ($range) exceeds the supported maximum of 2^32 (4294967296) values" >&2
+    exit 1
+fi
+
+if (( range <= 256 )); then
+    nbytes=1; cap=256
+elif (( range <= 65536 )); then
+    nbytes=2; cap=65536
+else
+    nbytes=4; cap=4294967296
+fi
+
+threshold=$(( cap - cap % range ))
+
+for (( c = 0; c < count; c++ )); do
+    while :; do
+        val=$(od -An -tu$nbytes -N$nbytes /dev/urandom | tr -d ' ')
+        if (( val < threshold )); then
+            echo $(( min + val % range ))
+            break
+        fi
+    done
+done
