@@ -1,12 +1,13 @@
 # Changelog
 
-## 1.1.0 (2026-07-05)
+## 1.1.0 (2026-07-06)
 
 ### Fixed
 
 - `geometric` crashed with `ZeroDivisionError` for p below ~1e-16 and silently lost precision for all small p; the inverse transform now uses `log1p(-p)`.
-- The shared uniform construction in the Python samplers could round to exactly 1.0 (probability ~2^-54), letting `geometric` return 0, `binomial --p 1` return less than n, and `exponential` print `-0`. All samplers now use `((u >> 12) + 0.5) * 2^-52`, which is exact in double arithmetic and strictly inside (0, 1).
+- The shared uniform construction in the Python samplers could round to exactly 1.0 (probability ~2^-54), letting `geometric` return 0, `binomial --p 1` return less than n, and `exponential` print `-0`. All samplers now use `((u >> 12) + 0.5) * 2^-52`, which is exact in double arithmetic and strictly inside (0, 1). The `bellcurve` `Decimal` uniforms had the same edge (the top draw rounded to 1, and `lo + width * u` could round onto the interval bound); both now reject and redraw.
 - `bellcurve` tail sampling was inaccurate in extreme tails (at `--tail-pct 1e-300` samples were misplaced by ~0.6σ): Newton refinement of the inverse CDF now iterates on ln(CDF), restoring full 50-digit accuracy out to ~37σ (verified against mpmath).
+- The shared entropy stream deadlocked (and leaked a spinning `od`) in environments that ignore SIGPIPE, such as CI runners: `od` outlived its consumer instead of dying, and a bash process-substitution parent waited on it forever, hanging any caller that captured the tool's output. The stream now announces its producer's pid and is explicitly reaped on exit; `od`'s broken-pipe stderr is silenced. (Surfaced as a 6-hour CI hang on macOS.)
 - `choose`, `weighted`, and `randstr` printed nothing for items or output that looked like `echo` flags (such as `-n`); they now print via `printf`.
 - `weighted` reported a confusing error for arguments missing the `:WEIGHT` suffix.
 
@@ -20,7 +21,8 @@
 ### Added
 
 - MIT LICENSE (the README had claimed MIT with no licence text).
-- Functional, statistical, and lint test suites with CI on Ubuntu and macOS (including a system bash 3.2 run).
+- Functional, statistical, and lint test suites with CI on Ubuntu and macOS (including a system bash 3.2 run). CI is hardened with per-step timeouts (a hang fails fast instead of burning the 6-hour default), a least-privilege `contents: read` token, and a `concurrency` group that cancels superseded runs and dedupes the push + pull_request double trigger.
+- Edge-case and known-value test files: `tests/edge_cases.py` drives extreme entropy through every uniform construction, and `tests/known_values.py` pins the `bellcurve` tail maths to mpmath-derived reference values so the accuracy claim stays enforced without an mpmath dependency.
 - `--` end-of-options support in `shuffle`, `choose`, and `weighted`, so items may begin with a dash.
 - `shuffle` and `choose` now print usage instead of hanging when stdin is an interactive terminal and no items were given.
 
