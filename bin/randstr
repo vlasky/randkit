@@ -28,7 +28,10 @@ options:
                   base58    Bitcoin alphabet — no 0/O/I/l (58 chars)
                   base64    a-z, A-Z, 0-9, +, / (64 chars)
                   symbol    printable ASCII 33-126 (94 chars)
-                Or provide a custom string of characters (e.g., "abc123")
+                Or provide a custom string of characters (e.g., "abc123").
+                Duplicate characters in a custom alphabet make that character
+                proportionally more likely (sampling is uniform over the
+                string, not over distinct characters).
 
 Output:
   One random string per line.

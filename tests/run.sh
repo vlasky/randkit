@@ -133,6 +133,8 @@ run_ok  "weighted colon in item" weighted "a:b:2"
 out_is  "weighted colon in item value" "a:b"
 run_ok  "weighted dash item" weighted "-n:1"
 out_is  "weighted dash item value" "-n"
+run_ok  "weighted dash item after --" weighted -- "-h:1"
+out_is  "weighted dash item after -- value" "-h"
 run_fail "weighted zero weight" weighted a:1 b:0
 run_fail "weighted negative weight" weighted a:-1
 run_fail "weighted missing weight" weighted red
@@ -231,6 +233,8 @@ else
 fi
 run_ok  "shuffle single item" shuffle solo
 out_is  "shuffle single item value" "solo"
+run_ok  "shuffle dash items after --" shuffle -- -h -n
+if [[ "$(printf '%s\n' "$out" | sort | tr '\n' ' ')" == "-h -n " ]]; then pass; else fail "shuffle -- permutation: $out"; fi
 run_fail "shuffle empty stdin" bash -c ': | shuffle'
 
 # --- choose -----------------------------------------------------------------
@@ -249,6 +253,8 @@ run_ok  "choose args subset" choose 2 a b c d e
 line_count "choose args subset lines" 2
 run_ok  "choose dash item" choose 1 -n -n -n
 out_is  "choose dash item value" "-n"
+run_ok  "choose after --" choose -- 2 a b
+line_count "choose after -- lines" 2
 run_ok  "choose replace repeats" choose --replace 10 a
 line_count "choose replace lines" 10
 lines_match "choose replace output" '^a$'

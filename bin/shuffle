@@ -1,7 +1,7 @@
 #!/bin/bash
 if [[ "$1" == "-h" || "$1" == "--help" ]]; then
     cat <<'EOF'
-usage: shuffle [-h] [ITEM ...]
+usage: shuffle [-h] [--] [ITEM ...]
 
 Randomly shuffle a list of items and print them in uniformly random order,
 one per line. Items can be provided as command-line arguments or piped via
@@ -12,6 +12,7 @@ positional arguments:
 
 options:
   -h, --help  show this help message and exit
+  --          end of options; treat all following arguments as items
 
 Examples:
   shuffle 1 2 3 4 5              # prints 1-5 in random order
@@ -20,6 +21,18 @@ Examples:
   seq 1 100 | shuffle            # shuffles piped input
 EOF
     exit 0
+fi
+
+if [[ "$1" == "--" ]]; then
+    shift
+fi
+
+# Refuse to sit waiting on an interactive terminal when there is nothing
+# to shuffle.
+if (( $# == 0 )) && [ -t 0 ]; then
+    echo "usage: shuffle [-h] [--] [ITEM ...]" >&2
+    echo "Provide items as arguments or pipe lines to stdin." >&2
+    exit 1
 fi
 
 # shellcheck source=lib/rand-awk.sh

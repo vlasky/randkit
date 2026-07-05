@@ -17,7 +17,7 @@ def encode_crockford(value, length):
 
 def ulid_random():
     """Generate a ULID with fully random lower 80 bits."""
-    ms = int(time.time() * 1000)
+    ms = time.time_ns() // 1_000_000
     rand = int.from_bytes(os.urandom(10), 'big')
     # ULID = 48-bit timestamp (ms) || 80-bit random
     # Encode as 26 chars of Crockford Base32:
@@ -31,7 +31,7 @@ def ulid_monotonic(last_ulid):
     """Generate a monotonic ULID.
     If same millisecond as last ULID, increment the random part by 1.
     Otherwise, generate fresh randomness."""
-    ms = int(time.time() * 1000)
+    ms = time.time_ns() // 1_000_000
 
     if last_ulid is not None:
         last_ms = decode_crockford(last_ulid[:10])
@@ -40,9 +40,9 @@ def ulid_monotonic(last_ulid):
             rand = last_rand + 1
             if rand >= (1 << 80):
                 # Overflow: wait for next millisecond
-                while int(time.time() * 1000) == ms:
+                while time.time_ns() // 1_000_000 == ms:
                     pass
-                ms = int(time.time() * 1000)
+                ms = time.time_ns() // 1_000_000
                 rand = int.from_bytes(os.urandom(10), 'big')
         else:
             rand = int.from_bytes(os.urandom(10), 'big')

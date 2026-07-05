@@ -46,7 +46,7 @@ def uuid6():
 def uuid7():
     """Generate a time-ordered UUID v7 (RFC 9562)."""
     # 48-bit Unix timestamp in milliseconds + 74 random bits
-    ms = int(time.time() * 1000)
+    ms = time.time_ns() // 1_000_000
 
     b = bytearray(16)
     # Bytes 0-5: 48-bit ms timestamp (big-endian)

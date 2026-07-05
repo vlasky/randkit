@@ -16,7 +16,8 @@ def uniform_sample(lo, hi):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Sample from a continuous uniform distribution over [MIN, MAX]. "
+        description="Sample from a continuous uniform distribution over the open "
+                    "interval (MIN, MAX) — the endpoints themselves are never produced. "
                     "Outputs one floating-point number per line. "
                     "Uses 64-bit entropy from /dev/urandom for IEEE 754 double precision.",
         epilog="Examples:\n"
