@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        # ubuntu exercises GNU coreutils + mawk with a modern bash;
+        # macos exercises BSD od/awk with the system bash 3.2.
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install lint tools (macOS)
+        if: runner.os == 'macOS'
+        run: brew install shellcheck ruff
+
+      - name: Install lint tools (Linux)
+        if: runner.os == 'Linux'
+        run: pipx install ruff
+
+      - name: Lint
+        run: tests/lint.sh
+
+      - name: Functional tests
+        run: tests/run.sh
+
+      - name: Functional tests (system bash 3.2)
+        if: runner.os == 'macOS'
+        run: /bin/bash tests/run.sh
+
+      - name: Statistical smoke tests
+        run: tests/statistical.sh
