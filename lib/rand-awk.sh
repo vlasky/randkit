@@ -15,7 +15,11 @@
 # draws.
 
 randkit_open_byte_stream() {
-    exec 3< <(od -An -tu1 -v /dev/urandom)
+    # od's stderr is silenced: in environments that ignore SIGPIPE (GitHub
+    # Actions runners, some daemons), GNU od survives the consumer exiting
+    # and prints "write error: Broken pipe" instead of dying quietly. A real
+    # read failure is still reported by rand_byte's refill_buf.
+    exec 3< <(od -An -tu1 -v /dev/urandom 2>/dev/null)
 }
 
 # rand_byte() dispenses one byte from the FD 3 stream, buffering a line of
