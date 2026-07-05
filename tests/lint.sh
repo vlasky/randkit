@@ -12,7 +12,7 @@ py_tools=(bellcurve binomial poisson exponential geometric uniform uuid ulid)
 status=0
 
 if command -v shellcheck >/dev/null 2>&1; then
-    shellcheck "${bash_tools[@]/#/bin/}" tests/*.sh || status=1
+    shellcheck -x lib/rand-awk.sh "${bash_tools[@]/#/bin/}" tests/*.sh || status=1
 else
     echo "shellcheck not found; skipping bash lint" >&2
 fi
