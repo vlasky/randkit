@@ -15,11 +15,32 @@
 # draws.
 
 randkit_open_byte_stream() {
-    # od's stderr is silenced: in environments that ignore SIGPIPE (GitHub
-    # Actions runners, some daemons), GNU od survives the consumer exiting
-    # and prints "write error: Broken pipe" instead of dying quietly. A real
-    # read failure is still reported by rand_byte's refill_buf.
-    exec 3< <(od -An -tu1 -v /dev/urandom 2>/dev/null)
+    # The stream's first line is the wrapper's pid, announced before od
+    # starts so it cannot interleave with od's output. Reading it from the
+    # stream is the only portable way to learn the pid — $! after a process
+    # substitution is unreliable in bash 3.2. od's stderr is silenced: in
+    # environments that ignore SIGPIPE (GitHub Actions runners, some
+    # daemons), od survives the consumer exiting and prints "write error:
+    # Broken pipe" instead of dying quietly. A real read failure is still
+    # reported by rand_byte's refill_buf.
+    # The TERM trap is installed in two stages so a kill arriving at any
+    # moment finds a handler: before od exists a bare exit suffices; the
+    # od-killing trap replaces it as soon as od has a pid. A tool can exit
+    # this early (e.g. shuffle with empty stdin never draws a byte).
+    exec 3< <(sh -c '
+        echo "$$"
+        trap "exit 0" TERM
+        od -An -tu1 -v /dev/urandom 2>/dev/null &
+        trap "kill $! 2>/dev/null; exit 0" TERM
+        wait')
+    read -r RANDKIT_STREAM_PID <&3
+    # Reap the producer explicitly on exit. Relying on SIGPIPE to end od
+    # deadlocks under ignored SIGPIPE on macOS: bash waits for the process
+    # substitution child at exit while still holding FD 3 open, od never
+    # dies, and any caller capturing our output blocks with it. TERM makes
+    # the wrapper kill od and exit normally, so bash has no signal death to
+    # report on stderr (a notice `wait 2>/dev/null` cannot silence in 3.2).
+    trap 'exec 3<&-; kill "$RANDKIT_STREAM_PID" 2>/dev/null; wait "$RANDKIT_STREAM_PID" 2>/dev/null' EXIT
 }
 
 # rand_byte() dispenses one byte from the FD 3 stream, buffering a line of
