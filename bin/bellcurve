@@ -165,14 +165,18 @@ def uniform_in_range(lo, hi):
     # Generate enough random bits to cover the precision
     n_bytes = (prec * 4) // 8 + 10  # ~3.32 bits per decimal digit, plus margin
     cap = 2 ** (n_bytes * 8)
-    while True:
+    for _ in range(100):
         raw = int.from_bytes(os.urandom(n_bytes), 'big')
         u = (2 * Decimal(raw) + 1) / (2 * Decimal(cap))
-        # The division rounds to context precision, so the largest draws land
-        # on exactly 1; redraw to keep u strictly below 1 and the result
-        # strictly below hi.
-        if u < 1:
-            return lo + width * u
+        candidate = lo + width * u
+        # Both the division and the scaling round to context precision, so
+        # edge draws can land exactly on hi (e.g. width * 0.99...9 rounding
+        # half-even back to width); redraw to keep the interval open.
+        if lo < candidate < hi:
+            return candidate
+    # Unreachable in practice (each draw fails with probability ~1e-50);
+    # the midpoint is a safe interior fallback.
+    return lo + width / 2
 
 
 def sample_tail(mean, std, left_mass, right_mass):

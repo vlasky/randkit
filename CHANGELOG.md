@@ -33,7 +33,7 @@ Initial release.
 - `randint` — uniform integer in [MIN, MAX] with rejection sampling
 - `cointoss` — fair coin flip (50/50)
 - `diceroll` — fair 6-sided die (shorthand for `randint 1 6`)
-- `uniform` — uniform float in [MIN, MAX]
+- `uniform` — uniform float in (MIN, MAX)
 - `bellcurve` — normal (Gaussian) distribution with optional tail sampling
 - `binomial` — binomial distribution (n trials, probability p)
 - `poisson` — Poisson distribution (lambda)

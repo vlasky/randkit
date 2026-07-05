@@ -29,16 +29,24 @@ def load(tool):
     return ns
 
 
-def patch(first, then=b'\x00'):
-    """os.urandom stand-in: first call returns `first` bytes, later calls
-    return `then` bytes (so rejection loops terminate)."""
-    state = {'calls': 0}
+def patch_seq(chunks):
+    """os.urandom stand-in serving `chunks` in order; the last chunk repeats
+    forever (so rejection loops terminate). A one-byte chunk is repeated to
+    the requested length; longer chunks must match it exactly."""
+    queue = list(chunks)
 
     def fake(n):
-        state['calls'] += 1
-        return (first if state['calls'] == 1 else then) * n
+        chunk = queue.pop(0) if len(queue) > 1 else queue[0]
+        if len(chunk) == 1:
+            return chunk * n
+        assert len(chunk) == n, f"chunk of {len(chunk)} bytes, {n} requested"
+        return chunk
 
     os.urandom = fake
+
+
+def patch(first, then=b'\x00'):
+    patch_seq([first, then])
 
 
 try:
@@ -76,6 +84,18 @@ try:
     v = ns['uniform_in_range'](Decimal(0), Decimal(1))
     check("bellcurve uniform_in_range rejects the round-to-1 draw",
           Decimal(0) < v < Decimal(1))
+
+    # The largest u accepted by the u < 1 check can still land the final
+    # lo + width * u exactly on hi once the addition rounds to context
+    # precision (1 + 0.99...97 -> 2 at prec 50). The candidate itself must
+    # be range-checked, not just u.
+    nb = (50 * 4) // 8 + 10          # n_bytes used by uniform_in_range
+    cap = 2 ** (nb * 8)
+    raw_edge = (10**50 - 1) * cap // 10**50
+    patch_seq([raw_edge.to_bytes(nb, 'big'), b'\x00'])
+    v = ns['uniform_in_range'](Decimal(1), Decimal(2))
+    check("bellcurve uniform_in_range rejects candidates that round onto hi",
+          Decimal(1) < v < Decimal(2))
 finally:
     os.urandom = REAL_URANDOM
 
