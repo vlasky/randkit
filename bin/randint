@@ -76,22 +76,18 @@ if (( range > 4294967296 )); then
     exit 1
 fi
 
-if (( range <= 256 )); then
-    nbytes=1; cap=256
-elif (( range <= 65536 )); then
-    nbytes=2; cap=65536
-else
-    nbytes=4; cap=4294967296
-fi
+# shellcheck source=lib/rand-awk.sh
+. "$(dirname "$0")/../lib/rand-awk.sh"
 
-threshold=$(( cap - cap % range ))
+set -o pipefail
+randkit_open_byte_stream
 
-for (( c = 0; c < count; c++ )); do
-    while :; do
-        val=$(od -An -tu$nbytes -N$nbytes /dev/urandom | tr -d ' ')
-        if (( val < threshold )); then
-            echo $(( min + val % range ))
-            break
-        fi
-    done
+# awk draws uniform offsets in [0, range); bash adds MIN because its 64-bit
+# integer arithmetic stays exact for 18-digit bounds, where awk doubles
+# would lose precision beyond 2^53.
+awk -v range="$range" -v count="$count" "$RANDKIT_AWK_LIB"'
+BEGIN {
+    for (c = 0; c < count; c++) print rand_range(range)
+}' | while read -r offset; do
+    printf '%s\n' $(( min + offset ))
 done

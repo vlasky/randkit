@@ -107,19 +107,26 @@ if (( charset_len > 256 )); then
     exit 1
 fi
 
-threshold=$(( 256 - 256 % charset_len ))
+# shellcheck source=lib/rand-awk.sh
+. "$(dirname "$0")/../lib/rand-awk.sh"
 
-for (( c = 0; c < count; c++ )); do
+set -o pipefail
+randkit_open_byte_stream
+
+# awk draws one line of character indices per string; bash maps indices to
+# characters so multibyte alphabets keep bash's character (not byte)
+# semantics.
+awk -v count="$count" -v len="$length" -v n="$charset_len" "$RANDKIT_AWK_LIB"'
+BEGIN {
+    for (c = 0; c < count; c++) {
+        line = ""
+        for (i = 0; i < len; i++) line = line " " rand_range(n)
+        print substr(line, 2)
+    }
+}' | while read -r -a idxs; do
     result=""
-    for (( i = 0; i < length; i++ )); do
-        while :; do
-            val=$(od -An -tu1 -N1 /dev/urandom | tr -d ' ')
-            if (( val < threshold )); then
-                idx=$(( val % charset_len ))
-                result+="${chars:$idx:1}"
-                break
-            fi
-        done
+    for i in "${idxs[@]}"; do
+        result+=${chars:i:1}
     done
     # printf keeps flag-like output such as "-n" intact
     printf '%s\n' "$result"

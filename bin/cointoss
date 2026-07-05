@@ -36,11 +36,15 @@ if ! [[ "$count" =~ ^[1-9][0-9]{0,17}$ ]]; then
     exit 1
 fi
 
-for (( c = 0; c < count; c++ )); do
-    byte=$(od -An -tu1 -N1 /dev/urandom | tr -d ' ')
-    if (( byte % 2 == 0 )); then
-        echo "Heads"
-    else
-        echo "Tails"
-    fi
-done
+# shellcheck source=lib/rand-awk.sh
+. "$(dirname "$0")/../lib/rand-awk.sh"
+
+randkit_open_byte_stream
+
+awk -v count="$count" "$RANDKIT_AWK_LIB"'
+BEGIN {
+    for (c = 0; c < count; c++) {
+        side = (rand_byte() % 2 == 0) ? "Heads" : "Tails"
+        print side
+    }
+}'
