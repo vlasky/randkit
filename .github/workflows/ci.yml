@@ -7,7 +7,8 @@ on:
 # Superseded runs are cancelled rather than queued; matters most for the
 # scarce macOS runners.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # head_ref dedupes the push + pull_request double trigger for PR branches
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 permissions:
