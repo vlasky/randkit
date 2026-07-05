@@ -153,7 +153,7 @@ With `--replace`: selects N items independently (repeats possible). Output in se
 | Multiple random integers in range | `randint -c 10 a b` |
 | Multiple random integers (no replacement) | `seq a b \| choose N` |
 | Multiple random integers (with replacement) | `randint -c N a b` or `choose --replace N ...` |
-| Random float in [a,b] | `uniform --min a --max b` |
+| Random float in (a,b) | `uniform --min a --max b` |
 | Pick one item from a list | `choose 1 item1 item2 ...` |
 | Pick N items (no repeats) | `choose N item1 item2 ...` |
 | Pick N items (repeats ok) | `choose --replace N item1 item2 ...` |

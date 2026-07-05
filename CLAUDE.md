@@ -33,7 +33,7 @@ claude --plugin-dir /path/to/randkit
 | `randint` | Uniform integer in [MIN, MAX] | Integer |
 | `cointoss` | Fair coin (50/50) | "Heads" or "Tails" |
 | `diceroll` | Uniform integer 1–6 (shorthand for `randint 1 6`) | Integer |
-| `uniform` | Uniform float in [MIN, MAX] | Float |
+| `uniform` | Uniform float in (MIN, MAX) | Float |
 | `bellcurve` | Normal (Gaussian) | Float |
 | `binomial` | Binomial(n, p) | Integer in [0, n] |
 | `poisson` | Poisson(λ) | Non-negative integer |
@@ -69,7 +69,7 @@ claude --plugin-dir /path/to/randkit
 
 ## Algorithms and accuracy
 
-- All Python samplers derive U(0,1) as `((u >> 11) + 0.5) * 2^-53` from a 64-bit read: exact in double arithmetic and strictly inside (0, 1), so no sampler can see U = 0.0 or 1.0.
+- All Python samplers derive U(0,1) as `((u >> 12) + 0.5) * 2^-52` from a 64-bit read: every step is exact in double arithmetic (52 bits + the half fit in the 53-bit significand) and the result is strictly inside (0, 1), so no sampler can see U = 0.0 or 1.0. (A 53-bit variant is NOT safe: (2^53 - 1) + 0.5 rounds up to 2^53, producing exactly 1.0.)
 - `randint`: Rejection sampling with adaptive byte width (1/2/4 bytes). Exactly uniform. Ranges up to 2^32 - 1. awk draws offsets; bash adds MIN with exact 64-bit integer arithmetic (18-digit bounds).
 - `cointoss`: Single byte mod 2. Exactly 50/50 (256 divides evenly by 2).
 - `diceroll`: Calls `randint 1 6`.
@@ -81,7 +81,7 @@ claude --plugin-dir /path/to/randkit
 - `poisson` (λ >= 10): Hörmann's PTRS (transformed rejection). Exact, O(1) per sample. Maximum λ is 2^53 (beyond that float64 cannot represent consecutive integer counts).
 - `exponential`: Inverse transform (-ln(U)/λ). Exact, one 64-bit read per sample.
 - `geometric`: Inverse transform (ceil(ln(U)/log1p(-p))). log1p keeps precision for tiny p, where ln(1-p) rounds to 0. Exact, one 64-bit read per sample.
-- `weighted`: Cumulative distribution + uniform float. Selection probabilities match the given weights to double precision (awk float arithmetic).
+- `weighted`: Cumulative distribution + uniform float. The uniform is (52 bits + 0.5) / 2^52 — exact in awk doubles and strictly inside (0, 1) — so selection probabilities match the given weights to double precision.
 - `randstr`: Per-character rejection sampling from alphabet. Exactly uniform over charset.
 - `uuid` v4: 122 random bits with version/variant bits set. Exactly as specified in RFC 9562.
 - `uuid` v6: 60-bit timestamp (100ns since UUID epoch) + 14-bit random clock_seq + 48-bit random node.

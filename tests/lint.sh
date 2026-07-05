@@ -24,7 +24,7 @@ for t in "${py_tools[@]}"; do
 done
 
 if command -v ruff >/dev/null 2>&1; then
-    ruff check "$tmp" || status=1
+    ruff check "$tmp" tests/*.py || status=1
 else
     echo "ruff not found; skipping python lint" >&2
 fi

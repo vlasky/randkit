@@ -8,10 +8,11 @@ import struct
 def uniform():
     """Uniform random float in (0, 1) from /dev/urandom.
 
-    (top 53 bits + 0.5) / 2^53 is exact in double arithmetic, so the result
-    is strictly inside (0, 1) — no rounding to 0.0 or 1.0 is possible."""
+    (top 52 bits + 0.5) / 2^52 is exact in double arithmetic (the added 0.5
+    still fits in the 53-bit significand), so the result is strictly inside
+    (0, 1) — it can never round to 0.0 or 1.0."""
     u = struct.unpack('Q', os.urandom(8))[0]
-    return ((u >> 11) + 0.5) * 2.0**-53
+    return ((u >> 12) + 0.5) * 2.0**-52
 
 
 def poisson_inversion(lam):

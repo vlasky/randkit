@@ -38,7 +38,7 @@ claude --plugin-dir /path/to/randkit
 | `randint` | Uniform integer in [MIN, MAX] | Integer |
 | `cointoss` | Fair coin (50/50) | "Heads" or "Tails" |
 | `diceroll` | Uniform integer 1–6 (shorthand for `randint 1 6`) | Integer |
-| `uniform` | Uniform float in [MIN, MAX] | Float |
+| `uniform` | Uniform float in (MIN, MAX) | Float |
 | `bellcurve` | Normal (Gaussian) | Float |
 | `binomial` | Binomial(n, p) | Integer in [0, n] |
 | `poisson` | Poisson(λ) | Non-negative integer |
@@ -95,7 +95,7 @@ Claude will use the appropriate tool and show you the command and result.
 - `poisson`: Inversion (λ < 10) or Hörmann's PTRS (λ ≥ 10). Exact.
 - `exponential`: Inverse transform −ln(U)/λ. Exact.
 - `geometric`: Inverse transform ceil(ln(U)/log1p(−p)). Exact even for tiny p.
-- `weighted`: Cumulative distribution function with 64-bit uniform float.
+- `weighted`: Cumulative distribution walk with an exact 52-bit uniform float.
 - `randstr`: Per-character rejection sampling. Exactly uniform over alphabet.
 - `uuid` v4: 122 random bits, version/variant set per RFC 9562.
 - `uuid` v6: 60-bit 100ns timestamp + random clock_seq and node. Lexicographically time-sortable.

@@ -5,7 +5,7 @@
 ### Fixed
 
 - `geometric` crashed with `ZeroDivisionError` for p below ~1e-16 and silently lost precision for all small p; the inverse transform now uses `log1p(-p)`.
-- The shared uniform construction in the Python samplers could round to exactly 1.0 (probability ~2^-54), letting `geometric` return 0, `binomial --p 1` return less than n, and `exponential` print `-0`. All samplers now use `((u >> 11) + 0.5) * 2^-53`, which is exact and strictly inside (0, 1).
+- The shared uniform construction in the Python samplers could round to exactly 1.0 (probability ~2^-54), letting `geometric` return 0, `binomial --p 1` return less than n, and `exponential` print `-0`. All samplers now use `((u >> 12) + 0.5) * 2^-52`, which is exact in double arithmetic and strictly inside (0, 1).
 - `bellcurve` tail sampling was inaccurate in extreme tails (at `--tail-pct 1e-300` samples were misplaced by ~0.6σ): Newton refinement of the inverse CDF now iterates on ln(CDF), restoring full 50-digit accuracy out to ~37σ (verified against mpmath).
 - `choose`, `weighted`, and `randstr` printed nothing for items or output that looked like `echo` flags (such as `-n`); they now print via `printf`.
 - `weighted` reported a confusing error for arguments missing the `:WEIGHT` suffix.

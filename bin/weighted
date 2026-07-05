@@ -97,13 +97,15 @@ randkit_open_byte_stream
 # scaled by the total weight, walked along the cumulative weights. awk
 # prints item indices; bash maps them back to the (arbitrary) item strings.
 printf '%s\n' "${weights[@]}" | awk -v count="$count" "$RANDKIT_AWK_LIB"'
-# Uniform float in [0, 1) with ~53-bit resolution: seven bytes accumulated
-# into a double. The first six bytes (48 bits) are exact; the seventh byte
-# extends resolution to the limit of double precision.
+# Uniform float strictly inside (0, 1): 52 random bits plus 0.5, divided by
+# 2^52. Every step is exact in double arithmetic (52 integer bits plus the
+# half fit in the 53-bit significand), so the result can never round to 0
+# or 1 and every one of the 2^52 outcomes is equally likely.
 function rand_u(   v, i) {
     v = 0
-    for (i = 0; i < 7; i++) v = v * 256 + rand_byte()
-    return v / 72057594037927936    # 2^56
+    for (i = 0; i < 6; i++) v = v * 256 + rand_byte()
+    v = v * 16 + rand_byte() % 16
+    return (v + 0.5) / 4503599627370496    # 2^52
 }
 {
     w[NR] = $1 + 0

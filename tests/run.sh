@@ -267,6 +267,17 @@ run_fail "choose zero N" choose 0 a b
 run_fail "choose non-integer N" choose abc a b
 run_fail "choose no args" choose
 
+# --- uniform construction edge cases -----------------------------------------
+run_ok  "python uniform constructions at extreme entropy" \
+        python3 "$(dirname "$0")/edge_cases.py"
+# weighted's awk rand_u uses (52 bits + 0.5) / 2^52; confirm the extremes are
+# exact and strictly inside (0, 1) in this platform's awk doubles.
+run_ok  "awk 52-bit uniform extremes" awk 'BEGIN {
+    lo = (0 + 0.5) / 4503599627370496
+    hi = (4503599627370495 + 0.5) / 4503599627370496
+    exit !(lo > 0 && hi < 1)
+}'
+
 # --- piping -----------------------------------------------------------------
 run_ok  "pipe choose into shuffle" bash -c 'seq 1 100 | choose 10 | shuffle'
 line_count "pipe result lines" 10
