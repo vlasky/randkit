@@ -17,8 +17,9 @@ options:
 Examples:
   shuffle 1 2 3 4 5              # prints 1-5 in random order
   shuffle red green blue         # shuffles words
-  echo -e "a\nb\nc" | shuffle   # reads lines from stdin
+  printf 'a\nb\nc\n' | shuffle   # reads lines from stdin
   seq 1 100 | shuffle            # shuffles piped input
+  shuffle -- -h -v --foo         # -- lets items begin with a dash
 EOF
     exit 0
 fi

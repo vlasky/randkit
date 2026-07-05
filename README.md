@@ -1,4 +1,5 @@
-![Version: 1.0](https://img.shields.io/badge/version-1.0-brightgreen.svg)
+![Version: 1.1](https://img.shields.io/badge/version-1.1-brightgreen.svg)
+![CI](https://github.com/vlasky/randkit/actions/workflows/ci.yml/badge.svg)
 ![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-Plugin-blueviolet.svg)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Shell: bash](https://img.shields.io/badge/shell-bash-green.svg)
@@ -93,7 +94,7 @@ Claude will use the appropriate tool and show you the command and result.
 - `binomial`: Direct Bernoulli trials. Exact, O(n).
 - `poisson`: Inversion (λ < 10) or Hörmann's PTRS (λ ≥ 10). Exact.
 - `exponential`: Inverse transform −ln(U)/λ. Exact.
-- `geometric`: Inverse transform ceil(ln(U)/ln(1−p)). Exact.
+- `geometric`: Inverse transform ceil(ln(U)/log1p(−p)). Exact even for tiny p.
 - `weighted`: Cumulative distribution function with 64-bit uniform float.
 - `randstr`: Per-character rejection sampling. Exactly uniform over alphabet.
 - `uuid` v4: 122 random bits, version/variant set per RFC 9562.
@@ -119,6 +120,17 @@ diceroll -c 3 | paste -sd+ | bc      # sum of 3 dice
 - Python 3 (for bellcurve, binomial, poisson, exponential, geometric, uniform, uuid, ulid)
 - `/dev/urandom` (Linux, macOS, WSL)
 
+## Testing
+
+```bash
+tests/run.sh          # functional tests: contracts, validation, regressions
+tests/statistical.sh  # statistical smoke tests (~6-7 sigma bounds)
+tests/lint.sh         # shellcheck + ruff (+ pyright when installed)
+```
+
+CI runs all three on Ubuntu (GNU coreutils, mawk) and macOS (BSD od/awk,
+system bash 3.2).
+
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).

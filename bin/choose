@@ -31,7 +31,7 @@ Examples:
   choose 2 a b c d e              # selects 2 of 5, in original order
   seq 1 100 | choose 10           # selects 10 of 100 lines, order preserved
   choose --replace 10 a b c       # 10 picks from 3 items (repeats possible)
-  echo -e "x\ny\nz" | choose 2   # selects 2 of 3 lines
+  printf 'x\ny\nz\n' | choose 2   # selects 2 of 3 lines
 EOF
     exit 0
 fi

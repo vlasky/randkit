@@ -6,24 +6,24 @@ description: >
   when the user asks you to do something "randomly" or "at random", to pick/choose/select
   something, to generate sample data, unique IDs, or to simulate probabilistic outcomes.
 allowed-tools:
-  - Bash(randint*)
-  - Bash(cointoss*)
-  - Bash(diceroll*)
-  - Bash(bellcurve*)
-  - Bash(binomial*)
-  - Bash(poisson*)
-  - Bash(exponential*)
-  - Bash(geometric*)
-  - Bash(uniform*)
-  - Bash(weighted*)
-  - Bash(randstr*)
-  - Bash(uuid*)
-  - Bash(ulid*)
-  - Bash(shuffle*)
-  - Bash(choose*)
-  - Bash(seq*)
-  - Bash(echo*)
-  - Bash(printf*)
+  - Bash(randint:*)
+  - Bash(cointoss:*)
+  - Bash(diceroll:*)
+  - Bash(bellcurve:*)
+  - Bash(binomial:*)
+  - Bash(poisson:*)
+  - Bash(exponential:*)
+  - Bash(geometric:*)
+  - Bash(uniform:*)
+  - Bash(weighted:*)
+  - Bash(randstr:*)
+  - Bash(uuid:*)
+  - Bash(ulid:*)
+  - Bash(shuffle:*)
+  - Bash(choose:*)
+  - Bash(seq:*)
+  - Bash(echo:*)
+  - Bash(printf:*)
 ---
 
 # Random Generation Skill
@@ -56,15 +56,16 @@ Integer 1-6. Shorthand for `randint 1 6`.
 ```
 uniform [--min A] [--max B] [-c COUNT]
 ```
-Outputs float in [A, B]. Default: U(0, 1). IEEE 754 double precision (64-bit entropy).
+Outputs float in the open interval (A, B). Default: U(0, 1). IEEE 754 double precision (64-bit entropy).
 
 ### Random String
 ```
 randstr [-c COUNT] [-a ALPHABET] [LENGTH]
 ```
 Random string of given length (default 16) from a character set.
-Built-in alphabets: `alnum` (default), `alpha`, `lower`, `upper`, `digit`, `hex`, `HEX`, `base64`, `symbol`.
-Or pass a custom string: `-a "abc123"`.
+Built-in alphabets: `alnum` (default), `alpha`, `lower`, `upper`, `digit`, `hex`, `HEX`,
+`base32`, `crockford`, `zbase32`, `base58`, `base64`, `symbol`.
+Or pass a custom string: `-a "abc123"` (duplicate characters weight that character proportionally).
 
 ### Weighted Choice
 ```
@@ -125,10 +126,11 @@ Sorts chronologically. With `--monotonic`, increments the random part within the
 ### Shuffle Items
 ```
 shuffle ITEM1 ITEM2 ITEM3 ...
-echo -e "a\nb\nc" | shuffle
+printf 'a\nb\nc\n' | shuffle
 seq 1 52 | shuffle
 ```
 All items in uniformly random order, one per line. Fisher-Yates algorithm.
+If the first item could be mistaken for a flag (e.g. `-h`), put `--` before the items.
 
 ### Choose N Items
 ```
