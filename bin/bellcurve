@@ -133,14 +133,16 @@ def inv_normal_cdf_decimal(p):
     inner = -2 * ln_p - two_pi.ln()
     x = -inner.sqrt()
 
-    # Newton-Raphson refinement
-    for _ in range(10):
+    # Newton-Raphson on ln(CDF): x -= (ln CDF(x) - ln p) * CDF(x)/PDF(x).
+    # In extreme tails Newton on the raw CDF overshoots and then creeps back
+    # at only ~1/x per step, so it cannot converge in any fixed iteration
+    # budget; the log transform keeps quadratic convergence everywhere.
+    for _ in range(60):
         cdf_x = dec_normal_cdf(x)
         pdf_x = dec_normal_pdf(x)
-        if pdf_x == 0:
+        if pdf_x == 0 or cdf_x <= 0:
             break
-        err = cdf_x - p
-        correction = err / pdf_x
+        correction = (cdf_x.ln() - ln_p) * cdf_x / pdf_x
         x -= correction
         if abs(correction) < Decimal(10) ** (-(getcontext().prec - 5)):
             break

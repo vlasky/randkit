@@ -178,6 +178,23 @@ line_count "exponential lines" 10
 lines_match "exponential non-negative" '^[0-9]'
 run_fail "exponential lambda=0" exponential --lambda 0
 
+# --- bellcurve ----------------------------------------------------------------
+run_ok  "bellcurve basic" bellcurve -n 5
+line_count "bellcurve lines" 5
+run_ok  "bellcurve mean/std" bellcurve --mean 100 --std 1 -n 10
+in_range "bellcurve mean/std plausible range" 90 110
+run_ok  "bellcurve right tail" bellcurve --tail-sigma 2 --right -n 5
+in_range "bellcurve right tail cutoff" 2 9
+run_ok  "bellcurve tail above" bellcurve --tail-above 120 --mean 100 --std 15 -n 5
+in_range "bellcurve tail above cutoff" 120 200
+# The outer 1e-300 percent of N(0,1) starts at |z| = 37.1897...; samples
+# from the right half of that tail must sit just beyond the cutoff.
+run_ok  "bellcurve extreme tail" bellcurve --tail-pct 1e-300 --right
+in_range "bellcurve extreme tail quantile" 37.1897 38
+run_fail "bellcurve tail-pct out of range" bellcurve --tail-pct 100
+run_fail "bellcurve zero std" bellcurve --std 0
+run_fail "bellcurve conflicting tails" bellcurve --tail-sigma 2 --tail-pct 5
+
 # --- uuid -------------------------------------------------------------------
 run_ok  "uuid v4" uuid
 lines_match "uuid v4 format" '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
