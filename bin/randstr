@@ -123,5 +123,6 @@ for (( c = 0; c < count; c++ )); do
             fi
         done
     done
-    echo "$result"
+    # printf keeps flag-like output such as "-n" intact
+    printf '%s\n' "$result"
 done

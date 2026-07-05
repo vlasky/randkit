@@ -53,6 +53,10 @@ num_re='^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$'
 items=()
 weights=()
 for arg in "$@"; do
+    if [[ "$arg" != *:* ]]; then
+        echo "Error: invalid format '$arg' (expected ITEM:WEIGHT)" >&2
+        exit 1
+    fi
     # Split on last colon (allows colons in item names)
     weight="${arg##*:}"
     item="${arg%:*}"
@@ -103,7 +107,8 @@ for (( c = 0; c < count; c++ )); do
             }
         }
         print NR - 1
-    }' | while read idx; do
-        echo "${items[$idx]}"
+    }' | while read -r idx; do
+        # printf keeps flag-like items such as "-n" intact
+        printf '%s\n' "${items[$idx]}"
     done
 done

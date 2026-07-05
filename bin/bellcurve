@@ -11,17 +11,21 @@ getcontext().prec = 50
 
 def uniform():
     """Uniform random Decimal in (0, 1) from /dev/urandom with 50 digits of precision."""
-    # Read 21 bytes (168 bits) for plenty of entropy beyond 50 decimal digits
+    # Read 21 bytes (168 bits) for plenty of entropy beyond 50 decimal digits.
     raw = int.from_bytes(os.urandom(21), 'big')
-    # Map to (0, 1) as a Decimal
     cap = 2 ** 168
-    return (Decimal(raw) + 1) / (Decimal(cap) + 1)
+    # Midpoint form (2*raw + 1) / (2*cap) keeps the result strictly inside
+    # (0, 1) — it can never round to 0 or 1 at context precision.
+    return (2 * Decimal(raw) + 1) / (2 * Decimal(cap))
 
 
 def uniform_float():
-    """Uniform random float in (0, 1) from /dev/urandom."""
+    """Uniform random float in (0, 1) from /dev/urandom.
+
+    (top 53 bits + 0.5) / 2^53 is exact in double arithmetic, so the result
+    is strictly inside (0, 1) — no rounding to 0.0 or 1.0 is possible."""
     u = struct.unpack('Q', os.urandom(8))[0]
-    return (u + 1) / (2**64 + 1)
+    return ((u >> 11) + 0.5) * 2.0**-53
 
 
 def normal_sample_float(mean, std):
@@ -268,8 +272,8 @@ def uniform_in_range(lo, hi):
     n_bytes = (prec * 4) // 8 + 10  # ~3.32 bits per decimal digit, plus margin
     raw = int.from_bytes(os.urandom(n_bytes), 'big')
     cap = 2 ** (n_bytes * 8)
-    # u in (0, 1) with full precision
-    u = (Decimal(raw) + 1) / (Decimal(cap) + 1)
+    # u in (0, 1) with full precision; midpoint form cannot round to 0 or 1
+    u = (2 * Decimal(raw) + 1) / (2 * Decimal(cap))
     return lo + width * u
 
 

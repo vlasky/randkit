@@ -8,8 +8,9 @@ import struct
 def uniform_sample(lo, hi):
     """Uniform random float in (lo, hi) from /dev/urandom."""
     u = struct.unpack('Q', os.urandom(8))[0]
-    # Map to (0, 1) then scale to (lo, hi)
-    t = (u + 1) / (2**64 + 1)
+    # Map to (0, 1): (top 53 bits + 0.5) / 2^53 is exact in double
+    # arithmetic, so t can never round to 0.0 or 1.0. Then scale to (lo, hi).
+    t = ((u >> 11) + 0.5) * 2.0**-53
     return lo + (hi - lo) * t
 
 

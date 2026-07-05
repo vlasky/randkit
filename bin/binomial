@@ -5,9 +5,12 @@ import struct
 
 
 def uniform():
-    """Uniform random float in (0, 1) from /dev/urandom."""
+    """Uniform random float in (0, 1) from /dev/urandom.
+
+    (top 53 bits + 0.5) / 2^53 is exact in double arithmetic, so the result
+    is strictly inside (0, 1) — no rounding to 0.0 or 1.0 is possible."""
     u = struct.unpack('Q', os.urandom(8))[0]
-    return (u + 1) / (2**64 + 1)
+    return ((u >> 11) + 0.5) * 2.0**-53
 
 
 def binomial_sample(n, p):

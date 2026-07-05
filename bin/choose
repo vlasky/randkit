@@ -166,7 +166,8 @@ if (( replace == 1 )); then
             fi
         done
         idx=$(( val % total ))
-        echo "${items[$idx]}"
+        # printf keeps flag-like items such as "-n" intact
+        printf '%s\n' "${items[$idx]}"
     done
 else
     # Without replacement
@@ -207,6 +208,7 @@ else
     IFS=$'\n' sorted=($(printf '%d\n' "${selected[@]}" | sort -n)); unset IFS
 
     for idx in "${sorted[@]}"; do
-        echo "${items[$idx]}"
+        # printf keeps flag-like items such as "-n" intact
+        printf '%s\n' "${items[$idx]}"
     done
 fi

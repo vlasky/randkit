@@ -6,9 +6,12 @@ import struct
 
 
 def uniform():
-    """Uniform random float in (0, 1) from /dev/urandom."""
+    """Uniform random float in (0, 1) from /dev/urandom.
+
+    (top 53 bits + 0.5) / 2^53 is exact in double arithmetic, so the result
+    is strictly inside (0, 1) — no rounding to 0.0 or 1.0 is possible."""
     u = struct.unpack('Q', os.urandom(8))[0]
-    return (u + 1) / (2**64 + 1)
+    return ((u >> 11) + 0.5) * 2.0**-53
 
 
 def geometric_sample(p):
@@ -17,7 +20,9 @@ def geometric_sample(p):
     if p >= 1.0:
         return 1
     u = uniform()
-    return int(math.ceil(math.log(u) / math.log(1 - p)))
+    # log1p(-p) stays exact for tiny p, where log(1 - p) rounds to 0 and
+    # would raise ZeroDivisionError (and lose precision well before that).
+    return int(math.ceil(math.log(u) / math.log1p(-p)))
 
 
 def main():
