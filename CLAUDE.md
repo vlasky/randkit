@@ -97,7 +97,7 @@ Tools that output one item per line can be piped into each other:
 
 ## Testing
 
-- `tests/run.sh` — functional tests (contracts, argument validation, regressions). Also run it under `/bin/bash` to verify bash 3.2 compatibility on macOS.
+- `tests/run.sh` — functional tests (contracts, argument validation, regressions). Also run it under `/bin/bash` to verify bash 3.2 compatibility on macOS. Includes `tests/edge_cases.py` (extreme entropy through every uniform construction) and `tests/known_values.py` (bellcurve tail maths against mpmath-derived reference values pinned to ~45+ digits, so the accuracy claim above stays verified in CI without an mpmath dependency).
 - `tests/statistical.sh` — statistical smoke tests with ~6-7σ bounds (false-positive rate below 1e-9 per check).
 - `tests/lint.sh` — shellcheck + ruff (+ pyright when installed); copies the extension-less Python tools to a temp dir as `.py` first.
 - CI (`.github/workflows/ci.yml`) runs all three on Ubuntu (GNU coreutils, mawk) and macOS (BSD od/awk, system bash 3.2).
