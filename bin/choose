@@ -178,7 +178,7 @@ else
 
     indices=()
     for (( i = 0; i < total; i++ )); do
-        indices+=($i)
+        indices+=("$i")
     done
 
     selected=()
@@ -199,13 +199,16 @@ else
             fi
         done
         j=$(( i + val % remaining ))
-        tmp=${indices[$i]}
-        indices[$i]=${indices[$j]}
-        indices[$j]=$tmp
-        selected+=(${indices[$i]})
+        tmp=${indices[i]}
+        indices[i]=${indices[j]}
+        indices[j]=$tmp
+        selected+=("${indices[i]}")
     done
 
-    IFS=$'\n' sorted=($(printf '%d\n' "${selected[@]}" | sort -n)); unset IFS
+    sorted=()
+    while IFS= read -r idx; do
+        sorted+=("$idx")
+    done < <(printf '%d\n' "${selected[@]}" | sort -n)
 
     for idx in "${sorted[@]}"; do
         # printf keeps flag-like items such as "-n" intact

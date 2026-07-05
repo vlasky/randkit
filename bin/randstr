@@ -102,14 +102,12 @@ if (( charset_len == 0 )); then
     exit 1
 fi
 
-if (( charset_len <= 256 )); then
-    nbytes=1; cap=256
-else
+if (( charset_len > 256 )); then
     echo "Error: alphabet too large (max 256 chars)" >&2
     exit 1
 fi
 
-threshold=$(( cap - cap % charset_len ))
+threshold=$(( 256 - 256 % charset_len ))
 
 for (( c = 0; c < count; c++ )); do
     result=""

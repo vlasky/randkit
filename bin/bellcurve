@@ -184,7 +184,6 @@ def dec_erfc(x):
             return 1 - _dec_erf_series(x)
         # Continued fraction (Lentz's method) for large x
         # erfc(x) = exp(-x^2)/sqrt(pi) * CF
-        a = x
         b = x * x
         # CF: 1/(x + 1/(2x + 2/(x + 3/(2x + ...))))
         # Use the asymptotic CF representation
@@ -385,6 +384,8 @@ def main():
     # Compute the left and right tail probability masses directly (each near 0).
     # We never form 1 - (a value near 1), so extreme right tails keep full
     # precision instead of rounding to zero.
+    left_mass = Decimal(0)
+    right_mass = Decimal(0)
     if args.tail_sigma is not None:
         if not math.isfinite(args.tail_sigma) or args.tail_sigma <= 0:
             parser.error("--tail-sigma must be a positive finite number")
