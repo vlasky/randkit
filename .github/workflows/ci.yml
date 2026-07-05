@@ -4,6 +4,15 @@ on:
   push:
   pull_request:
 
+# Superseded runs are cancelled rather than queued; matters most for the
+# scarce macOS runners.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   test:
     strategy:
@@ -13,6 +22,9 @@ jobs:
         # macos exercises BSD od/awk with the system bash 3.2.
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    # The suites finish in seconds; a hang (e.g. a pipe deadlock under the
+    # runner's ignored SIGPIPE) should fail fast, not burn the 6-hour default.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -28,11 +40,14 @@ jobs:
         run: tests/lint.sh
 
       - name: Functional tests
+        timeout-minutes: 5
         run: tests/run.sh
 
       - name: Functional tests (system bash 3.2)
         if: runner.os == 'macOS'
+        timeout-minutes: 5
         run: /bin/bash tests/run.sh
 
       - name: Statistical smoke tests
+        timeout-minutes: 5
         run: tests/statistical.sh
