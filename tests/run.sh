@@ -270,6 +270,8 @@ run_fail "choose no args" choose
 # --- uniform construction edge cases -----------------------------------------
 run_ok  "python uniform constructions at extreme entropy" \
         python3 "$(dirname "$0")/edge_cases.py"
+run_ok  "bellcurve tail maths against pinned high-precision values" \
+        python3 "$(dirname "$0")/known_values.py"
 # weighted's awk rand_u uses (52 bits + 0.5) / 2^52; confirm the extremes are
 # exact and strictly inside (0, 1) in this platform's awk doubles.
 run_ok  "awk 52-bit uniform extremes" awk 'BEGIN {
