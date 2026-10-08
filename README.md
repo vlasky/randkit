@@ -1,4 +1,4 @@
-![Version: 1.1](https://img.shields.io/badge/version-1.1-brightgreen.svg)
+![Version: 1.1.1](https://img.shields.io/badge/version-1.1.1-brightgreen.svg)
 ![CI](https://github.com/vlasky/randkit/actions/workflows/ci.yml/badge.svg)
 ![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-Plugin-blueviolet.svg)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
@@ -89,9 +89,9 @@ Claude will use the appropriate tool and show you the command and result.
 - `randint`: Rejection sampling with adaptive byte width (1/2/4 bytes). Exactly uniform. Ranges up to 2^32 - 1.
 - `cointoss`: Single byte mod 2. Exactly 50/50.
 - `diceroll`: Calls `randint 1 6`.
-- `uniform`: 64-bit entropy mapped to IEEE 754 double in (MIN, MAX).
+- `uniform`: 64-bit entropy mapped to IEEE 754 double in (MIN, MAX); a draw that rounds onto an endpoint is redrawn, so the interval is genuinely open.
 - `bellcurve`: Box-Muller transform (full distribution) or inverse CDF with 50-digit precision (tail sampling).
-- `binomial`: Direct Bernoulli trials. Exact, O(n).
+- `binomial`: Direct Bernoulli trials. Exact, O(n); n is capped at 10^8.
 - `poisson`: Inversion (λ < 10) or Hörmann's PTRS (λ ≥ 10). Exact.
 - `exponential`: Inverse transform −ln(U)/λ. Exact.
 - `geometric`: Inverse transform ceil(ln(U)/log1p(−p)). Exact even for tiny p.
@@ -102,7 +102,7 @@ Claude will use the appropriate tool and show you the command and result.
 - `uuid` v7: 48-bit ms timestamp + 74 random bits. Simpler than v6, preferred for new applications.
 - `ulid`: 48-bit ms timestamp + 80-bit random, Crockford Base32. Monotonic mode increments within same ms.
 - `shuffle`: Fisher-Yates with per-swap rejection sampling.
-- `choose`: Partial Fisher-Yates (without replacement) or independent draws (with replacement).
+- `choose`: Partial Fisher-Yates (without replacement) or independent draws (with replacement); stdin input uses reservoir sampling in a single linear pass.
 
 ## Piping
 
@@ -117,7 +117,7 @@ diceroll -c 3 | paste -sd+ | bc      # sum of 3 dice
 ## Requirements
 
 - Bash (for randint, cointoss, diceroll, weighted, randstr, shuffle, choose)
-- Python 3 (for bellcurve, binomial, poisson, exponential, geometric, uniform, uuid, ulid)
+- Python 3 (for bellcurve, binomial, poisson, exponential, geometric, uniform, uuid, ulid; they share `lib/randkit.py`)
 - `/dev/urandom` (Linux, macOS, WSL)
 
 ## Testing

@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.1.1 (2026-10-08)
+
+### Fixed
+
+- `bellcurve` crashed with a `decimal.InvalidOperation` traceback whenever a tail region reached past ~40% of the distribution (`--tail-above 90 --mean 100 --std 15`, `--tail-pct 90`, `--tail-sigma 0.1`): the asymptotic initial guess for the inverse CDF takes a square root whose radicand is negative for p above 1/sqrt(2π). Near the centre the guess now comes from the linearised CDF; known-value tests pin p = 0.4 to 0.4999.
+- `uniform` could emit an endpoint for ranges other than (0, 1): scaling the exact (0, 1) draw rounds, so `--min 1 --max 2` could print exactly `2` (probability ~2^-52 per sample, but the help text promises never). It now redraws in that case, and the edge-case test covers scaled ranges. A range whose width overflows a double (`--min -1e308 --max 1e308`) printed `inf` and is now rejected.
+- The Python tools printed a `BrokenPipeError` traceback when a pipe cut their output short (`uuid -c 1000000 | head`); they now restore the default SIGPIPE disposition and exit quietly like other filters.
+- `choose N` from stdin was O(N²) (an insertion sort of the reservoir: 57 s for N = 20000, 4 minutes for 40000). The reservoir is now keyed by line number and emitted in one linear pass (0.2 s).
+- `randstr` produced invalid UTF-8 for multibyte custom alphabets under the C/POSIX locale (cron, CI, many subprocess contexts), where bash slices strings by byte; it now switches to an available UTF-8 locale or refuses with a clear error.
+- `uuid --version 6` left the multicast bit of its random node clear, which RFC 9562 section 6.10 requires to be set.
+- `bellcurve` erfc accuracy dipped to ~40 significant digits just below the series/continued-fraction crossover (erfc arguments 5.5 to 5.9, about 8σ); the crossover moved from 6 to 4 (about 5.7σ) with more continued-fraction terms and now holds more than 55 digits everywhere, measured against mpmath.
+
+### Changed
+
+- The Python tools share one runtime library (`lib/randkit.py`) for the uniform construction and process setup, mirroring `lib/rand-awk.sh` on the bash side; the six copies of the uniform construction are gone.
+- `binomial` reads its entropy in batches (about 4x faster) and refuses n above 10^8, where a single O(n) sample would take minutes.
+- Lint rules are pinned in `ruff.toml` so results do not drift with ruff's defaults; pyright now runs in CI on Linux; `actions/checkout` is pinned to a commit SHA.
+
 ## 1.1.0 (2026-07-06)
 
 ### Fixed
