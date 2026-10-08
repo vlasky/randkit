@@ -106,6 +106,7 @@ run_ok  "uniform custom range" uniform --min 5 --max 6 -c 3
 line_count "uniform custom lines" 3
 in_range "uniform custom values" 5 6
 run_fail "uniform min >= max" uniform --min 2 --max 2
+run_fail "uniform width overflows" uniform --min -1e308 --max 1e308
 run_fail "uniform bad count" uniform -c 0
 
 # --- randstr ----------------------------------------------------------------
@@ -115,6 +116,12 @@ run_ok  "randstr hex" randstr -a hex 32
 lines_match "randstr hex format" '^[0-9a-f]{32}$'
 run_ok  "randstr custom alphabet" randstr -a ab 20
 lines_match "randstr custom format" '^[ab]{20}$'
+# Under the C locale bash slices by byte; a multibyte alphabet must still
+# come out as whole characters. Python decodes (so invalid UTF-8 fails) and
+# counts characters without depending on which locales are installed.
+run_ok  "randstr multibyte alphabet under C locale" \
+    bash -c 'LC_ALL=C LANG=C randstr -a "αβγδ" 8 | python3 -c "import sys; print(len(sys.stdin.buffer.read().decode()))"'
+out_is  "randstr multibyte alphabet character count" "9"  # 8 chars + newline
 run_ok  "randstr dash alphabet" randstr -a "-n" 4
 lines_match "randstr dash format" '^[n-]{4}$'
 run_ok  "randstr count" randstr -c 5 8
@@ -162,6 +169,7 @@ lines_match "binomial p=1 values" '^10$'
 run_ok  "binomial range" binomial --n 10 --p 0.5 -c 20
 in_range "binomial values" 0 10
 run_fail "binomial negative n" binomial --n -1
+run_fail "binomial n above O(n) cap" binomial --n 100000001
 run_fail "binomial p>1" binomial --p 1.5
 
 # --- poisson ----------------------------------------------------------------
@@ -193,6 +201,14 @@ in_range "bellcurve tail above cutoff" 120 200
 # from the right half of that tail must sit just beyond the cutoff.
 run_ok  "bellcurve extreme tail" bellcurve --tail-pct 1e-300 --right
 in_range "bellcurve extreme tail quantile" 37.1897 38
+# Tails reaching past ~0.4 of the mass once crashed the Decimal initial
+# guess (negative radicand); every draw must stay on the right side of X.
+run_ok  "bellcurve tail above below the mean" bellcurve --tail-above 90 --mean 100 --std 15 -n 40
+in_range "bellcurve tail above below the mean range" 90 200
+run_ok  "bellcurve tail below above the mean" bellcurve --tail-below 110 --mean 100 --std 15 -n 40
+in_range "bellcurve tail below above the mean range" 0 110
+run_ok  "bellcurve wide tail-pct" bellcurve --tail-pct 90 -n 40
+run_ok  "bellcurve tiny tail-sigma" bellcurve --tail-sigma 0.1 -n 40
 run_fail "bellcurve tail-pct out of range" bellcurve --tail-pct 100
 run_fail "bellcurve zero std" bellcurve --std 0
 run_fail "bellcurve conflicting tails" bellcurve --tail-sigma 2 --tail-pct 5
@@ -200,7 +216,10 @@ run_fail "bellcurve conflicting tails" bellcurve --tail-sigma 2 --tail-pct 5
 # --- uuid -------------------------------------------------------------------
 run_ok  "uuid v4" uuid
 lines_match "uuid v4 format" '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
-run_ok  "uuid v6" uuid --version 6
+run_ok  "uuid v6" uuid --version 6 -c 20
+# RFC 9562 6.10: a random node MUST set the multicast bit (first node
+# octet odd), so the 21st hex digit's low bit is set.
+lines_match "uuid v6 format and multicast node bit" '^[0-9a-f]{8}-[0-9a-f]{4}-6[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f][13579bdf][0-9a-f]{10}$'
 lines_match "uuid v6 format" '^[0-9a-f]{8}-[0-9a-f]{4}-6[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
 run_ok  "uuid v7" uuid --version 7
 lines_match "uuid v7 format" '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
@@ -261,6 +280,11 @@ lines_match "choose replace output" '^a$'
 run_ok  "choose large stdin reservoir" bash -c 'seq 1 100000 | choose 3'
 line_count "choose large stdin lines" 3
 in_range "choose large stdin range" 1 100000
+# A large N from stdin once sorted the reservoir in O(N^2) (minutes at
+# N = 20000); it must finish promptly and still preserve input order.
+run_ok  "choose large N from stdin" bash -c 'seq 1 100000 | choose 50000'
+line_count "choose large N line count" 50000
+run_ok  "choose large N keeps input order" bash -c 'seq 1 100000 | choose 50000 | sort -nc'
 run_fail "choose N > total" choose 5 a b
 run_fail "choose N > total stdin" bash -c 'seq 1 3 | choose 5'
 run_fail "choose zero N" choose 0 a b
