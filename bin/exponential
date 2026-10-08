@@ -48,7 +48,7 @@ def main():
         parser.error("lambda must be a positive finite number")
 
     for _ in range(args.count):
-        print(f"{exponential_sample(args.lam):.15g}")
+        print(repr(exponential_sample(args.lam)))
 
 
 if __name__ == "__main__":

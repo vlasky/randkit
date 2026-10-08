@@ -231,7 +231,8 @@ def main():
                "  arbitrary-precision erf/erfc built on Decimal exp, ln, and sqrt.\n"
                "\n"
                "Precision:\n"
-               "  Full distribution output: 15 significant digits (IEEE 754 double).\n"
+               "  Full distribution output: IEEE 754 double, printed in its shortest\n"
+               "  round-trip form (up to 17 significant digits).\n"
                "  Tail sampling output: up to 50 significant digits.\n"
                "  Tail percentages as small as 1e-300 are supported (corresponding to ~37σ).\n"
                "  Entropy source: /dev/urandom (168 bits per sample in tail mode).\n"
@@ -283,7 +284,7 @@ def main():
 
     if not use_tail:
         for _ in range(args.n):
-            print(f"{normal_sample_float(args.mean, args.std):.15g}")
+            print(repr(normal_sample_float(args.mean, args.std)))
         return
 
     mean = Decimal(str(args.mean))
