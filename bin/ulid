@@ -39,14 +39,18 @@ def ulid_monotonic(last_ulid):
 
     if last_ulid is not None:
         last_ms = decode_crockford(last_ulid[:10])
-        if ms == last_ms:
+        if ms <= last_ms:
+            # Same millisecond, or the clock stepped backwards: hold the
+            # last timestamp and increment so ordering is never broken.
+            ms = last_ms
             last_rand = decode_crockford(last_ulid[10:])
             rand = last_rand + 1
             if rand >= (1 << 80):
-                # Overflow: wait for next millisecond
-                while time.time_ns() // 1_000_000 == ms:
-                    pass
-                ms = time.time_ns() // 1_000_000
+                # Overflow: wait for the clock to pass the held millisecond,
+                # and use the reading that passed it (a fresh read could
+                # step back again).
+                while ms <= last_ms:
+                    ms = time.time_ns() // 1_000_000
                 rand = int.from_bytes(os.urandom(10), 'big')
         else:
             rand = int.from_bytes(os.urandom(10), 'big')
