@@ -91,6 +91,74 @@ try:
     check("uuid6 sets the node multicast bit under all-zero entropy",
           int(u6[24:26], 16) & 1 == 1 and u6[14] == '6')
 
+    # Monotonic v7 under a frozen clock: each UUID is the previous 74-bit
+    # value plus 1; on rollover (all-ones seed) it waits for the clock to
+    # advance and reseeds; a clock stepping backwards holds the timestamp.
+    import time
+    real_time_ns = time.time_ns
+    try:
+        clock = [1_700_000_000_000 * 1_000_000]
+        time.time_ns = lambda: clock[0]
+        patch(b'\x01', then=b'\x01')
+        stream = ns['uuid7_monotonic']()
+        a, b_, c = next(stream), next(stream), next(stream)
+        def v(u):
+            return int(u.replace('-', ''), 16)
+
+        def rand(u):
+            # the 74-bit value: rand_a (12 bits above the variant) then rand_b
+            return ((v(u) >> 64) & 0xFFF) << 62 | (v(u) & ((1 << 62) - 1))
+        check("uuid7 monotonic same-ms values strictly increase", a < b_ < c)
+        check("uuid7 monotonic increments the 74-bit value by exactly 1",
+              rand(b_) == rand(a) + 1 and rand(c) == rand(b_) + 1)
+        check("uuid7 monotonic keeps version and variant", b_[14] == '7' and b_[19] in '89ab')
+        # rollover: seed all ones, then the clock must advance before the next value
+        patch(b'\xff', then=b'\x00')
+        clock[0] += 1_000_000
+        stream = ns['uuid7_monotonic']()
+        first = next(stream)
+        ticks = [0]
+        def advancing():
+            # three reads at the held millisecond, then the clock moves on once
+            ticks[0] += 1
+            if ticks[0] == 4:
+                clock[0] += 1_000_000
+            return clock[0]
+        time.time_ns = advancing
+        second = next(stream)
+        check("uuid7 monotonic rollover waits for the next millisecond and still increases",
+              rand(first) == ns['RAND74_MAX'] and second > first and v(second) >> 80 == (v(first) >> 80) + 1)
+        # clock stepping backwards: timestamp is held, value still increases
+        patch(b'\x01', then=b'\x01')
+        base = clock[0]
+        time.time_ns = lambda: base
+        stream = ns['uuid7_monotonic']()
+        x = next(stream)
+        time.time_ns = lambda: base - 5_000_000
+        y = next(stream)
+        check("uuid7 monotonic holds the timestamp when the clock steps back",
+              y > x and (v(y) >> 80) == (v(x) >> 80))
+        # ulid rollover with readings 100, 100, 101, 99: the value must carry
+        # the reading that passed the held millisecond (101), not a later
+        # re-read that stepped back (99), which would sort before the first.
+        ns = load('ulid')
+        readings = [100, 100, 101, 99, 99, 99]
+        time.time_ns = lambda: readings.pop(0) * 1_000_000 if len(readings) > 1 else readings[0] * 1_000_000
+        patch(b'\xff', then=b'\x00')
+        u1 = ns['ulid_monotonic'](None)
+        u2 = ns['ulid_monotonic'](u1)
+        check("ulid monotonic rollover uses the reading that passed the held ms",
+              ns['decode_crockford'](u1[:10]) == 100 and ns['decode_crockford'](u2[:10]) == 101 and u2 > u1)
+        # ulid with a clock stepping back: timestamp held, value increases
+        patch(b'\x01', then=b'\x01')
+        readings[:] = [200, 195, 195]
+        u3 = ns['ulid_monotonic'](None)
+        u4 = ns['ulid_monotonic'](u3)
+        check("ulid monotonic holds the timestamp when the clock steps back",
+              u4[:10] == u3[:10] and u4 > u3)
+    finally:
+        time.time_ns = real_time_ns
+
     ns = load('bellcurve')
     Decimal = ns['Decimal']
     for pattern, name in ((b'\xff', 'all-ones'), (b'\x00', 'all-zeros')):
