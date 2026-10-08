@@ -27,7 +27,10 @@ def uuid6():
     # 14-bit clock sequence and 48-bit node (random)
     rand = os.urandom(8)
     clock_seq = int.from_bytes(rand[:2], 'big') & 0x3FFF
-    node = rand[2:]
+    # RFC 9562 section 6.10: a randomly generated node MUST have the least
+    # significant bit of its first octet set (the multicast bit), which no
+    # IEEE 802 MAC address carries, so it can never collide with a real one.
+    node = bytes([rand[2] | 0x01]) + rand[3:]
 
     # Pack into 16 bytes with v6 bit layout:
     # time_high (32 bits) | time_mid (16 bits) | version (4) + time_low (12 bits) |
