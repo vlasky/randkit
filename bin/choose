@@ -80,15 +80,19 @@ if (( $# == 0 && replace == 0 )); then
     awk -v n="$n" "$RANDKIT_AWK_LIB"'
         {
             # Fill reservoir with the first n lines; thereafter, replace
-            # uniformly with probability n/NR (Vitter Algorithm R).
+            # uniformly with probability n/NR (Vitter Algorithm R). The
+            # text is keyed by original line number (slot_line maps slots
+            # to the line they hold), so the final pass can walk line
+            # numbers in order and needs no sort.
             if (NR <= n) {
-                line_no[NR-1] = NR
-                text[NR-1]    = $0
+                slot_line[NR-1] = NR
+                text[NR] = $0
             } else {
                 j = rand_range(NR)
                 if (j < n) {
-                    line_no[j] = NR
-                    text[j]    = $0
+                    delete text[slot_line[j]]
+                    slot_line[j] = NR
+                    text[NR] = $0
                 }
             }
         }
@@ -98,19 +102,7 @@ if (( $# == 0 && replace == 0 )); then
                 printf "Error: N must be between 1 and %d (got %d)\n", total, n > "/dev/stderr"
                 exit 1
             }
-            # Sort the n reservoir slots by original line number, emit in input order.
-            for (i = 0; i < n; i++) ord[i] = i
-            for (i = 1; i < n; i++) {
-                key  = ord[i]
-                kval = line_no[key]
-                k = i - 1
-                while (k >= 0 && line_no[ord[k]] > kval) {
-                    ord[k+1] = ord[k]
-                    k--
-                }
-                ord[k+1] = key
-            }
-            for (i = 0; i < n; i++) print text[ord[i]]
+            for (i = 1; i <= total; i++) if (i in text) print text[i]
         }
     '
     exit $?
