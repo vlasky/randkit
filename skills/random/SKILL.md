@@ -110,11 +110,13 @@ Positive integers (minimum 1). Default: Geometric(0.5). Models "trials until fir
 ### UUID
 ```
 uuid [--version 4|6|7] [-c COUNT]
+uuid --version 7 --monotonic [-c COUNT]
 ```
 Generate UUIDs in standard `8-4-4-4-12` hex format.
 - **v4** (default): 122 random bits. No time component.
 - **v6**: Time-ordered (RFC 9562). 60-bit timestamp at 100ns precision + random node. Sorts lexicographically by creation time.
 - **v7**: Time-ordered (RFC 9562). 48-bit ms timestamp + 74 random bits. Simpler than v6, preferred for new applications.
+- **v7 `--monotonic`**: strictly increasing within the same millisecond (random bits incremented by 1, RFC 9562 section 6.2 Method 2). Use for batches that must sort in creation order; consecutive IDs in one millisecond are predictable from each other.
 
 ### ULID
 ```
@@ -172,6 +174,7 @@ With `--replace`: selects N items independently (repeats possible). Output in se
 | UUID (time-sortable, ms, preferred) | `uuid --version 7` |
 | ULID (time-sortable ID) | `ulid` |
 | Batch of ordered ULIDs | `ulid --monotonic -c 10` |
+| Batch of ordered UUIDs | `uuid --version 7 --monotonic -c 10` |
 | Extreme / tail values | `bellcurve --tail-sigma K` or `--tail-pct P` |
 
 ## Piping Patterns

@@ -49,23 +49,56 @@ def uuid6():
     return format_uuid(b)
 
 
-def uuid7():
-    """Generate a time-ordered UUID v7 (RFC 9562)."""
-    # 48-bit Unix timestamp in milliseconds + 74 random bits
-    ms = time.time_ns() // 1_000_000
+RAND74_MAX = (1 << 74) - 1
 
+
+def uuid7_pack(ms, rand):
+    """Pack a 48-bit millisecond timestamp and a 74-bit value into the v7
+    layout: rand_a (12 bits) after the version nibble, rand_b (62 bits) after
+    the variant bits."""
     b = bytearray(16)
-    # Bytes 0-5: 48-bit ms timestamp (big-endian)
     b[0:6] = ms.to_bytes(6, 'big')
-    # Bytes 6-15: random
-    rand = os.urandom(10)
-    b[6:16] = rand
-    # Set version 7: top nibble of byte 6
-    b[6] = (b[6] & 0x0F) | 0x70
-    # Set variant 10xx: top 2 bits of byte 8
-    b[8] = (b[8] & 0x3F) | 0x80
-
+    rand_a = rand >> 62
+    rand_b = rand & ((1 << 62) - 1)
+    b[6:8] = (0x7000 | rand_a).to_bytes(2, 'big')         # version 7
+    b[8:16] = ((0b10 << 62) | rand_b).to_bytes(8, 'big')  # variant 10xx
     return format_uuid(b)
+
+
+def rand74():
+    return int.from_bytes(os.urandom(10), 'big') >> 6
+
+
+def uuid7():
+    """Generate a time-ordered UUID v7 (RFC 9562): 48-bit ms timestamp + 74 random bits."""
+    return uuid7_pack(time.time_ns() // 1_000_000, rand74())
+
+
+def uuid7_monotonic():
+    """Yield strictly increasing UUID v7s (RFC 9562 section 6.2, Method 2).
+
+    The 74 random bits double as a randomly seeded counter: within one
+    millisecond each UUID is the previous one plus 1, incremented in the
+    least significant position; a new millisecond reseeds it. On a counter
+    rollover (or a clock that steps backwards) the timestamp is held and
+    generation waits for the clock to pass it, as the RFC's rollover
+    guidance requires, rather than emitting an out-of-order value.
+    """
+    last_ms = None
+    rand = 0
+    while True:
+        ms = time.time_ns() // 1_000_000
+        if last_ms is not None and ms <= last_ms:
+            ms = last_ms
+            rand += 1
+            if rand > RAND74_MAX:
+                while ms <= last_ms:
+                    ms = time.time_ns() // 1_000_000
+                rand = rand74()
+        else:
+            rand = rand74()
+        last_ms = ms
+        yield uuid7_pack(ms, rand)
 
 
 def format_uuid(b):
@@ -89,23 +122,44 @@ def main():
                "     with 74 random bits. Simpler than v6, sorts lexicographically.\n"
                "     Preferred for new applications needing time-sortable UUIDs.\n"
                "\n"
+               "Monotonic mode (--monotonic, v7 only):\n"
+               "  Within one millisecond the random bits act as a counter incremented\n"
+               "  by 1 (RFC 9562 section 6.2, Method 2), so a batch sorts in creation\n"
+               "  order even when several UUIDs share a timestamp. Each millisecond\n"
+               "  reseeds the counter randomly; a rollover waits for the next\n"
+               "  millisecond. Trade-off: consecutive UUIDs within one millisecond are\n"
+               "  predictable from each other, so do not use it where unguessability\n"
+               "  between neighbouring IDs matters.\n"
+               "\n"
                "Examples:\n"
                "  uuid                   # one UUID v4\n"
                "  uuid -c 5              # five UUID v4s\n"
                "  uuid --version 6       # one UUID v6 (time-ordered, 100ns)\n"
                "  uuid --version 7       # one UUID v7 (time-ordered, ms)\n"
-               "  uuid --version 7 -c 10 # ten UUID v7s\n",
+               "  uuid --version 7 -c 10 # ten UUID v7s\n"
+               "  uuid --version 7 --monotonic -c 10  # ten strictly ordered v7s\n",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--version", type=int, choices=[4, 6, 7], default=4,
                         help="UUID version to generate (default: 4)")
     parser.add_argument("-c", "--count", type=int, default=1,
                         help="Number of UUIDs to output, one per line (default: 1)")
+    parser.add_argument("--monotonic", action="store_true",
+                        help="v7 only: strictly increasing UUIDs within the same "
+                             "millisecond (random bits incremented instead of redrawn)")
 
     args = parser.parse_args()
 
     if args.count < 1:
         parser.error("count must be a positive integer")
+    if args.monotonic and args.version != 7:
+        parser.error("--monotonic requires --version 7")
+
+    if args.monotonic:
+        stream = uuid7_monotonic()
+        for _ in range(args.count):
+            print(next(stream))
+        return
 
     gen = {4: uuid4, 6: uuid6, 7: uuid7}[args.version]
 

@@ -221,6 +221,13 @@ run_fail "bellcurve conflicting tails" bellcurve --tail-sigma 2 --tail-pct 5
 # --- uuid -------------------------------------------------------------------
 run_ok  "uuid v4" uuid
 lines_match "uuid v4 format" '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+run_ok  "uuid v7 monotonic" uuid --version 7 --monotonic -c 300
+line_count "uuid v7 monotonic lines" 300
+lines_match "uuid v7 monotonic format" '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+run_ok  "uuid v7 monotonic strictly increasing" \
+    bash -c 'uuid --version 7 --monotonic -c 300 | awk "NR > 1 && \$0 <= prev { exit 1 } { prev = \$0 }"'
+run_fail "uuid monotonic needs v7" uuid --monotonic
+run_fail "uuid v6 monotonic rejected" uuid --version 6 --monotonic
 run_ok  "uuid v6" uuid --version 6 -c 20
 # RFC 9562 6.10: a random node MUST set the multicast bit (first node
 # octet odd), so the 21st hex digit's low bit is set.
