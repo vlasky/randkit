@@ -107,6 +107,11 @@ line_count "uniform custom lines" 3
 in_range "uniform custom values" 5 6
 run_fail "uniform min >= max" uniform --min 2 --max 2
 run_fail "uniform width overflows" uniform --min -1e308 --max 1e308
+run_fail "uniform adjacent doubles (empty open interval)" uniform --min 1 --max 1.0000000000000002
+# Exactly one double lies strictly inside; the output must print it at full
+# precision rather than rounding to an endpoint at 15 significant digits.
+run_ok  "uniform one interior double" uniform --min 1 --max 1.0000000000000004 -c 20
+lines_match "uniform one interior double value" '^1\.0000000000000002$'
 run_fail "uniform bad count" uniform -c 0
 
 # --- randstr ----------------------------------------------------------------
@@ -280,11 +285,16 @@ lines_match "choose replace output" '^a$'
 run_ok  "choose large stdin reservoir" bash -c 'seq 1 100000 | choose 3'
 line_count "choose large stdin lines" 3
 in_range "choose large stdin range" 1 100000
-# A large N from stdin once sorted the reservoir in O(N^2) (minutes at
-# N = 20000); it must finish promptly and still preserve input order.
-run_ok  "choose large N from stdin" bash -c 'seq 1 100000 | choose 50000'
-line_count "choose large N line count" 50000
-run_ok  "choose large N keeps input order" bash -c 'seq 1 100000 | choose 50000 | sort -nc'
+# A large N from stdin once sorted the reservoir in O(N^2) (a minute at
+# N = 20000, hours at 50000); it must finish within a bounded time, with
+# the right count, in input order. Python enforces the deadline portably.
+run_ok  "choose large N from stdin finishes promptly, in order" python3 -c '
+import subprocess, sys
+r = subprocess.run(["bash", "-c", "seq 1 100000 | choose 50000"],
+                   capture_output=True, text=True, timeout=60)
+vals = [int(v) for v in r.stdout.split()]
+sys.exit(0 if r.returncode == 0 and len(vals) == 50000 and vals == sorted(vals)
+         and len(set(vals)) == 50000 else 1)'
 run_fail "choose N > total" choose 5 a b
 run_fail "choose N > total stdin" bash -c 'seq 1 3 | choose 5'
 run_fail "choose zero N" choose 0 a b
@@ -308,6 +318,15 @@ run_ok  "awk 52-bit uniform extremes" awk 'BEGIN {
 run_ok  "pipe choose into shuffle" bash -c 'seq 1 100 | choose 10 | shuffle'
 line_count "pipe result lines" 10
 in_range "pipe result range" 1 100
+# A reader that stops early must not provoke a BrokenPipeError traceback
+# from the Python tools (they restore the default SIGPIPE disposition).
+# shellcheck disable=SC2016  # the $err expansions belong to the inner bash
+run_ok  "python tool cut short by head exits quietly" bash -c '
+    err=$(mktemp)
+    uuid -c 200000 2>"$err" | head -1 >/dev/null
+    bellcurve -n 200000 2>>"$err" | head -1 >/dev/null
+    cat "$err"; rm -f "$err"'
+out_is  "python tool cut short by head prints nothing on stderr" ""
 
 # --- summary ----------------------------------------------------------------
 echo

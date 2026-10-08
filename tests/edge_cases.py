@@ -83,6 +83,14 @@ try:
             t = ns['uniform_sample'](lo, hi)
             check(f"uniform_sample({lo:g},{hi:g}) {name} strictly inside", lo < t < hi)
 
+    # RFC 9562 6.10: a random v6 node MUST have its multicast bit set. With
+    # all-zero entropy the bit is set only if the code sets it.
+    ns = load('uuid')
+    patch(b'\x00', then=b'\x00')
+    u6 = ns['uuid6']()
+    check("uuid6 sets the node multicast bit under all-zero entropy",
+          int(u6[24:26], 16) & 1 == 1 and u6[14] == '6')
+
     ns = load('bellcurve')
     Decimal = ns['Decimal']
     for pattern, name in ((b'\xff', 'all-ones'), (b'\x00', 'all-zeros')):

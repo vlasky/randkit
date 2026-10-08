@@ -57,11 +57,24 @@ INV_CDF = [
 CDF = [
     ('-1.5', '0.06680720126885806600449404097988607952289518566122144241'),
     ('-5.6', '0.00000001071759025831090735496089608281707225540129155538949112'),
+    # Just below the old erfc crossover (x = 6, z = -8.49), where the old
+    # series lost ~10 digits (rel err 6e-40 here); the new crossover at 4
+    # holds ~1e-48. The 1e-42 tolerance separates the two.
+    ('-8.4', '2.232393197288050341136354800806128874057312402537309678e-17'),
     ('-5.7', '0.000000005990371401063534429833946417850679728931907371716267081'),
     ('-8', '6.220960574271784123515995172588188422488717278900275802e-16'),
     ('-15', '3.670966199312750885786089655334743486416251628040157475e-51'),
     ('-37', '5.725571222524576822683192548273201656432786242832901882e-300'),
 ]
+
+# p = 0.5 is the median; it used to recurse forever (reflecting 1 - p gives
+# 0.5 again), and a tail crossing the mean can draw it.
+got = ns['inv_normal_cdf_decimal'](Decimal('0.5'))
+if got == 0:
+    print("ok: inv_normal_cdf(0.5) is exactly 0")
+else:
+    failures += 1
+    print(f"FAIL: inv_normal_cdf(0.5): got {got}, want 0", file=sys.stderr)
 
 for p_str, want in INV_CDF:
     got = ns['inv_normal_cdf_decimal'](Decimal(p_str))
