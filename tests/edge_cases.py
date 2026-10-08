@@ -53,16 +53,35 @@ def patch(first, then=b'\x00'):
 try:
     for tool in ['binomial', 'exponential', 'geometric', 'poisson']:
         ns = load(tool)
+        # binomial draws through the batched reader; the others one at a time.
+        draw = ns['uniform'] if 'uniform' in ns else (lambda ns=ns: next(ns['uniforms'](1)))
         for pattern, name in ((b'\xff', 'all-ones'), (b'\x00', 'all-zeros')):
             patch(pattern, then=pattern)
-            u = ns['uniform']()
+            u = draw()
             check(f"{tool} uniform() {name} strictly inside (0,1)", 0.0 < u < 1.0)
-
-    ns = load('uniform')
+    # The batched reader must build each value exactly as uniform() does,
+    # across a chunk boundary too.
+    import randkit
     for pattern, name in ((b'\xff', 'all-ones'), (b'\x00', 'all-zeros')):
         patch(pattern, then=pattern)
-        t = ns['uniform_sample'](0.0, 1.0)
-        check(f"uniform_sample(0,1) {name} strictly inside (0,1)", 0.0 < t < 1.0)
+        vals = list(randkit.uniforms(4097))
+        check(f"uniforms(4097) {name} all strictly inside (0,1)",
+              len(vals) == 4097 and all(0.0 < v < 1.0 for v in vals))
+        check(f"uniforms(4097) {name} matches uniform()",
+              all(v == randkit.uniform() for v in vals[:2]))
+
+    ns = load('uniform')
+    # Scaling and translating the exact (0,1) uniform rounds, and for most
+    # ranges the extreme draws round onto an endpoint (1 + (1 - 2^-53) is
+    # 2.0); uniform_sample must redraw rather than emit it. The extreme
+    # chunk is served once and a mid-range one after it, so a correct
+    # rejection loop terminates while a missing one returns the endpoint.
+    for pattern, name in ((b'\xff', 'all-ones'), (b'\x00', 'all-zeros')):
+        for lo, hi in ((0.0, 1.0), (1.0, 2.0), (5.0, 6.0), (0.1, 0.2),
+                       (100.0, 115.0), (-1.0, 1.0), (1e300, 1e301)):
+            patch(pattern, then=b'\x80')
+            t = ns['uniform_sample'](lo, hi)
+            check(f"uniform_sample({lo:g},{hi:g}) {name} strictly inside", lo < t < hi)
 
     ns = load('bellcurve')
     Decimal = ns['Decimal']

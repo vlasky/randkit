@@ -9,8 +9,17 @@ from randkit import cli_setup, uniform
 
 
 def uniform_sample(lo, hi):
-    """Uniform random float in (lo, hi) from /dev/urandom."""
-    return lo + (hi - lo) * uniform()
+    """Uniform random float strictly inside (lo, hi) from /dev/urandom."""
+    width = hi - lo
+    while True:
+        candidate = lo + width * uniform()
+        # The uniform is exact and strictly inside (0, 1), but scaling and
+        # translating it round to the nearest double, which can land exactly
+        # on an endpoint (e.g. 1 + (1 - 2^-53) rounds to 2.0). Redraw in that
+        # case; each draw fails with probability ~2^-52, and the endpoints
+        # carry zero probability mass, so the result is still uniform.
+        if lo < candidate < hi:
+            return candidate
 
 
 def main():
@@ -41,6 +50,8 @@ def main():
         parser.error("MIN and MAX must be finite numbers")
     if args.min >= args.max:
         parser.error(f"MIN ({args.min}) must be less than MAX ({args.max})")
+    if not math.isfinite(args.max - args.min):
+        parser.error("MAX - MIN overflows double precision; narrow the range")
 
     for _ in range(args.count):
         print(f"{uniform_sample(args.min, args.max):.15g}")
