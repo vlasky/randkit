@@ -28,7 +28,7 @@ def check(desc, got, want_str, rel_tol):
 with open(os.path.join(BIN, 'bellcurve')) as f:
     src = f.read()
 src = src.replace('if __name__ == "__main__":\n    main()', '')
-ns = {}
+ns = {'__file__': os.path.join(BIN, 'bellcurve')}
 exec(compile(src, 'bellcurve', 'exec'), ns)
 getcontext().prec = 50
 

@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 import argparse
 import os
+import sys
 import time
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+from randkit import cli_setup
 
 CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
@@ -63,6 +67,7 @@ def decode_crockford(s):
 
 
 def main():
+    cli_setup()
     parser = argparse.ArgumentParser(
         description="Generate ULIDs (Universally Unique Lexicographically Sortable Identifiers). "
                     "Outputs one ULID per line as 26 characters of Crockford's Base32. "

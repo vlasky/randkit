@@ -22,15 +22,19 @@ trap 'rm -rf "$tmp"' EXIT
 for t in "${py_tools[@]}"; do
     cp "bin/$t" "$tmp/$t.py"
 done
+# The tools import the shared library by name; put it beside them so
+# ruff and pyright resolve `from randkit import ...`.
+cp lib/randkit.py "$tmp/randkit.py"
 
 if command -v ruff >/dev/null 2>&1; then
-    ruff check "$tmp" tests/*.py || status=1
+    ruff check --config ruff.toml "$tmp" lib/randkit.py tests/*.py || status=1
 else
     echo "ruff not found; skipping python lint" >&2
 fi
 
 if command -v pyright >/dev/null 2>&1; then
-    pyright "$tmp"/*.py || status=1
+    # Run from inside the temp dir so `from randkit import ...` resolves.
+    (cd "$tmp" && pyright ./*.py) || status=1
 else
     echo "pyright not found; skipping python type check" >&2
 fi

@@ -24,7 +24,8 @@ def load(tool):
     with open(os.path.join(BIN, tool)) as f:
         src = f.read()
     src = src.replace('if __name__ == "__main__":\n    main()', '')
-    ns = {}
+    # __file__ lets the tool locate lib/ the way it does when executed.
+    ns = {'__file__': os.path.join(BIN, tool)}
     exec(compile(src, tool, 'exec'), ns)
     return ns
 

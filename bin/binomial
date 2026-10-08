@@ -1,17 +1,10 @@
 #!/usr/bin/env python3
 import argparse
 import os
-import struct
+import sys
 
-
-def uniform():
-    """Uniform random float in (0, 1) from /dev/urandom.
-
-    (top 52 bits + 0.5) / 2^52 is exact in double arithmetic (the added 0.5
-    still fits in the 53-bit significand), so the result is strictly inside
-    (0, 1) — it can never round to 0.0 or 1.0."""
-    u = struct.unpack('Q', os.urandom(8))[0]
-    return ((u >> 12) + 0.5) * 2.0**-52
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+from randkit import cli_setup, uniform
 
 
 def binomial_sample(n, p):
@@ -24,6 +17,7 @@ def binomial_sample(n, p):
 
 
 def main():
+    cli_setup()
     parser = argparse.ArgumentParser(
         description="Sample from a binomial distribution (discrete, bell-shaped). "
                     "Simulates flipping a biased coin n times and counting successes. "

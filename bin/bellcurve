@@ -2,9 +2,11 @@
 import argparse
 import math
 import os
-import struct
 import sys
 from decimal import Decimal, getcontext, localcontext
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+from randkit import cli_setup, uniform as uniform_float
 
 getcontext().prec = 50
 
@@ -21,16 +23,6 @@ def uniform():
         # (0.5/cap) is representable and stays above 0.
         if u < 1:
             return u
-
-
-def uniform_float():
-    """Uniform random float in (0, 1) from /dev/urandom.
-
-    (top 52 bits + 0.5) / 2^52 is exact in double arithmetic (the added 0.5
-    still fits in the 53-bit significand), so the result is strictly inside
-    (0, 1) — it can never round to 0.0 or 1.0."""
-    u = struct.unpack('Q', os.urandom(8))[0]
-    return ((u >> 12) + 0.5) * 2.0**-52
 
 
 def normal_sample_float(mean, std):
@@ -72,7 +64,7 @@ def dec_erfc(x):
         ctx.prec += 10
         if x < 0:
             return 2 - dec_erfc(-x)
-        if x < Decimal('6'):
+        if x < Decimal(6):
             # Use series for erf, then erfc = 1 - erf
             return 1 - _dec_erf_series(x)
         # Continued fraction (Lentz's method) for large x
@@ -213,6 +205,7 @@ def sample_tail(mean, std, left_mass, right_mass):
 
 
 def main():
+    cli_setup()
     parser = argparse.ArgumentParser(
         description="Sample from a continuous normal (Gaussian) distribution. "
                     "Outputs one floating-point number per line. "

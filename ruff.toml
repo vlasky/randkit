@@ -1,0 +1,9 @@
+# Explicit rule set so lint results do not drift with ruff's defaults
+# between the versions brew, pipx and developers happen to have.
+[lint]
+select = ["E4", "E7", "E9", "F", "I", "B", "RUF", "FURB"]
+# Help text uses σ and λ deliberately.
+allowed-confusables = ["σ", "λ"]
+
+[lint.isort]
+combine-as-imports = true
