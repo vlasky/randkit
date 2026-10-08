@@ -52,9 +52,15 @@ def main():
         parser.error(f"MIN ({args.min}) must be less than MAX ({args.max})")
     if not math.isfinite(args.max - args.min):
         parser.error("MAX - MIN overflows double precision; narrow the range")
+    if math.nextafter(args.min, args.max) == args.max:
+        parser.error(f"no double lies strictly between MIN ({args.min!r}) and MAX "
+                     f"({args.max!r}); the open interval is empty")
 
     for _ in range(args.count):
-        print(f"{uniform_sample(args.min, args.max):.15g}")
+        # repr is the shortest string that round-trips the double, so a
+        # value just inside the interval prints as such (at 15 significant
+        # digits 1.0000000000000002 would print as the endpoint 1).
+        print(repr(uniform_sample(args.min, args.max)))
 
 
 if __name__ == "__main__":
