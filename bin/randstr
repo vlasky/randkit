@@ -105,6 +105,29 @@ if (( charset_len == 0 )); then
     exit 1
 fi
 
+# ${#chars} and ${chars:i:1} count characters only under a UTF-8 locale; in
+# the C/POSIX locale (cron, CI, many subprocess contexts) they count bytes
+# and a multibyte alphabet would be sliced into invalid UTF-8. If the
+# alphabet has non-ASCII bytes that the current locale is not decoding,
+# switch to a UTF-8 locale, or refuse when none is available.
+high_bytes=$(printf '%s' "$chars" | LC_ALL=C tr -d '\000-\177' | wc -c | tr -d ' ')
+if (( high_bytes > 0 )); then
+    byte_len=$(printf '%s' "$chars" | wc -c | tr -d ' ')
+    if (( charset_len == byte_len )); then
+        for candidate in C.UTF-8 en_US.UTF-8 en_AU.UTF-8 en_GB.UTF-8; do
+            if LC_ALL=$candidate bash -c '[[ ${#1} -lt $2 ]]' _ "$chars" "$byte_len" 2>/dev/null; then
+                export LC_ALL=$candidate
+                charset_len=${#chars}
+                break
+            fi
+        done
+        if (( charset_len == byte_len )); then
+            echo "Error: alphabet contains non-ASCII characters but no UTF-8 locale is available (set LC_ALL)" >&2
+            exit 1
+        fi
+    fi
+fi
+
 if (( charset_len > 256 )); then
     echo "Error: alphabet too large (max 256 chars)" >&2
     exit 1
