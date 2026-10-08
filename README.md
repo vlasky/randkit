@@ -1,4 +1,4 @@
-![Version: 1.1.1](https://img.shields.io/badge/version-1.1.1-brightgreen.svg)
+![Version: 1.2.0](https://img.shields.io/badge/version-1.2.0-brightgreen.svg)
 ![CI](https://github.com/vlasky/randkit/actions/workflows/ci.yml/badge.svg)
 ![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-Plugin-blueviolet.svg)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
@@ -46,7 +46,7 @@ claude --plugin-dir /path/to/randkit
 | `geometric` | Geometric(p) | Positive integer (trials until first success) |
 | `weighted` | Weighted discrete choice | Selected item |
 | `randstr` | Random string from alphabet | String |
-| `uuid` | UUID v4 (random), v6 or v7 (time-ordered) | UUID string |
+| `uuid` | UUID v4 (random), v6 or v7 (time-ordered; v7 has a monotonic mode) | UUID string |
 | `ulid` | ULID (time-sortable, Crockford Base32) | 26-char string |
 | `shuffle` | Uniform permutation | Input items reordered |
 | `choose` | Uniform subset selection | N items (with or without replacement) |
@@ -71,6 +71,7 @@ Ask Claude things like:
 - "Pick 10 items with replacement from a b c" → `choose --replace 10 a b c`
 - "Generate a UUID" → `uuid`
 - "Give me a time-sortable UUID" → `uuid --version 7`
+- "Generate 10 UUIDs that sort in creation order" → `uuid --version 7 --monotonic -c 10`
 - "Generate a ULID" → `ulid`
 - "Generate 10 monotonic ULIDs" → `ulid --monotonic -c 10`
 
@@ -89,7 +90,7 @@ Claude will use the appropriate tool and show you the command and result.
 - `randint`: Rejection sampling with adaptive byte width (1/2/4 bytes). Exactly uniform. Ranges up to 2^32 - 1.
 - `cointoss`: Single byte mod 2. Exactly 50/50.
 - `diceroll`: Calls `randint 1 6`.
-- `uniform`: 64-bit entropy mapped to IEEE 754 double in (MIN, MAX); a draw that rounds onto an endpoint is redrawn, so the interval is genuinely open.
+- `uniform`: 64-bit entropy mapped to IEEE 754 double in (MIN, MAX); a draw that rounds onto an endpoint is redrawn, so the interval is genuinely open. All float output is printed in its shortest round-trip form.
 - `bellcurve`: Box-Muller transform (full distribution) or inverse CDF with 50-digit precision (tail sampling).
 - `binomial`: Direct Bernoulli trials. Exact, O(n); n is capped at 10^8.
 - `poisson`: Inversion (λ < 10) or Hörmann's PTRS (λ ≥ 10). Exact.
@@ -99,7 +100,7 @@ Claude will use the appropriate tool and show you the command and result.
 - `randstr`: Per-character rejection sampling. Exactly uniform over alphabet.
 - `uuid` v4: 122 random bits, version/variant set per RFC 9562.
 - `uuid` v6: 60-bit 100ns timestamp + random clock_seq and node. Lexicographically time-sortable.
-- `uuid` v7: 48-bit ms timestamp + 74 random bits. Simpler than v6, preferred for new applications.
+- `uuid` v7: 48-bit ms timestamp + 74 random bits. Simpler than v6, preferred for new applications. `--monotonic` increments the random bits within a millisecond (RFC 9562 section 6.2 Method 2) and holds the timestamp across a rollover or clock step.
 - `ulid`: 48-bit ms timestamp + 80-bit random, Crockford Base32. Monotonic mode increments within same ms.
 - `shuffle`: Fisher-Yates with per-swap rejection sampling.
 - `choose`: Partial Fisher-Yates (without replacement) or independent draws (with replacement); stdin input uses reservoir sampling in a single linear pass.

@@ -43,7 +43,7 @@ claude --plugin-dir /path/to/randkit
 | `geometric` | Geometric(p) | Positive integer |
 | `weighted` | Weighted discrete choice | Selected item |
 | `randstr` | Random string from alphabet | String |
-| `uuid` | UUID v4 (random), v6 (time-ordered, 100ns), or v7 (time-ordered, ms) | UUID string |
+| `uuid` | UUID v4 (random), v6 (time-ordered, 100ns), or v7 (time-ordered, ms; `--monotonic` available) | UUID string |
 | `ulid` | ULID (time-sortable, Crockford Base32) | 26-char string |
 | `shuffle` | Uniform permutation | Input items reordered |
 | `choose` | Uniform subset selection (with/without replacement) | N items |
@@ -75,7 +75,7 @@ claude --plugin-dir /path/to/randkit
 - `randint`: Rejection sampling with adaptive byte width (1/2/4 bytes). Exactly uniform. Ranges up to 2^32 - 1. awk draws offsets; bash adds MIN with exact 64-bit integer arithmetic (18-digit bounds).
 - `cointoss`: Single byte mod 2. Exactly 50/50 (256 divides evenly by 2).
 - `diceroll`: Calls `randint 1 6`.
-- `uniform`: Inverse transform, IEEE 754 double output, open interval. Scaling the exact (0, 1) draw to (MIN, MAX) rounds, and for most ranges the extreme draws round onto an endpoint (1 + (1 - 2^-53) is 2.0), so the tool redraws when that happens. The endpoints carry zero probability mass, so this is not a bias. Any test that feeds constant extreme entropy into a rejection loop must switch to benign entropy after the first draw or it will spin forever.
+- `uniform`: Inverse transform, IEEE 754 double output printed with `repr` (shortest round-trip form; every float tool prints this way so a printed sample parses back to the exact double drawn), open interval. Scaling the exact (0, 1) draw to (MIN, MAX) rounds, and for most ranges the extreme draws round onto an endpoint (1 + (1 - 2^-53) is 2.0), so the tool redraws when that happens. The endpoints carry zero probability mass, so this is not a bias. Any test that feeds constant extreme entropy into a rejection loop must switch to benign entropy after the first draw or it will spin forever.
 - `bellcurve` (full distribution): Box-Muller transform, IEEE 754 double output.
 - `bellcurve` (tail sampling): Inverse CDF via an asymptotic initial guess + Newton-Raphson on ln(CDF), using Python `Decimal` (50 significant digits). Newton on the raw CDF creeps at ~1/x per step in extreme tails; iterating on ln(CDF) keeps quadratic convergence out to ~37σ (--tail-pct 1e-300), verified against mpmath to ~50 digits. The asymptotic guess `-sqrt(-2 ln p - ln 2π)` is undefined for p > 1/sqrt(2π) ≈ 0.399 (negative radicand, which `Decimal.sqrt` raises on); near the centre the guess is the linearised CDF `(p - 0.5) * sqrt(2π)` instead. Arbitrary-precision erf/erfc built on stdlib Decimal exp/ln/sqrt; erfc uses the Taylor series below x = 4 and a continued fraction (3 × prec terms) above, a crossover chosen by measuring against mpmath (a crossover at 6 lost ~10 digits just below it).
 - `binomial`: Direct Bernoulli trials (one 64-bit uniform per trial, read in 4096-draw batches). Exact, O(n) per sample; n is capped at 10^8 (~25 s) so a huge n fails fast instead of appearing to hang.
@@ -87,8 +87,8 @@ claude --plugin-dir /path/to/randkit
 - `randstr`: Per-character rejection sampling from alphabet. Exactly uniform over charset. bash counts and slices characters only under a UTF-8 locale; for a non-ASCII alphabet in the C/POSIX locale the tool switches to C.UTF-8 or en_*.UTF-8 when available and errors otherwise.
 - `uuid` v4: 122 random bits with version/variant bits set. Exactly as specified in RFC 9562.
 - `uuid` v6: 60-bit timestamp (100ns since UUID epoch) + 14-bit random clock_seq + 48-bit random node with the multicast bit set (RFC 9562 section 6.10 MUST).
-- `uuid` v7: 48-bit ms timestamp + 74 random bits. Lexicographically time-sortable.
-- `ulid`: 48-bit ms timestamp + 80-bit random. Monotonic mode increments random within same ms.
+- `uuid` v7: 48-bit ms timestamp + 74 random bits (rand_a 12 bits, rand_b 62 bits). Lexicographically time-sortable. `--monotonic` treats the 74 bits as a randomly seeded counter incremented by 1 within a millisecond (RFC 9562 section 6.2, Method 2; the RFC permits +1 but notes neighbouring IDs are then guessable from each other). A counter rollover or a clock that steps backwards holds the last timestamp and waits for the clock to pass it, so output never goes out of order. `ulid --monotonic` behaves the same way.
+- `ulid`: 48-bit ms timestamp + 80-bit random. Monotonic mode increments random within same ms (and holds the timestamp if the clock steps back).
 - `shuffle`: Fisher-Yates with per-swap rejection sampling. Scales byte width (1/2/4 bytes) to index range. Index arithmetic supports up to 2^32 items; the practical limit is awk's in-memory array.
 - `choose`: Partial Fisher-Yates to select indices, then sorts to preserve input order. Same rejection sampling as `shuffle`. With `--replace`: independent uniform draws. Stdin without `--replace` uses reservoir sampling (Vitter's Algorithm R) keyed by line number, emitted in one linear pass; an earlier insertion sort of the reservoir was O(N²) and took minutes at N = 20000.
 
@@ -108,4 +108,3 @@ Tools that output one item per line can be piped into each other:
 
 - **Weighted choice without replacement** — select N items with unequal probabilities, no repeats.
 - **Binomial for large n** — BTPE (or normal-approximation rejection) to replace O(n) Bernoulli trials when n is huge.
-- **uuid v7 monotonic mode** — RFC 9562 counter method, mirroring `ulid --monotonic`.
