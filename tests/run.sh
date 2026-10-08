@@ -224,6 +224,7 @@ lines_match "uuid v4 format" '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-
 run_ok  "uuid v7 monotonic" uuid --version 7 --monotonic -c 300
 line_count "uuid v7 monotonic lines" 300
 lines_match "uuid v7 monotonic format" '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+# shellcheck disable=SC2016  # the $0 expansions belong to the inner awk
 run_ok  "uuid v7 monotonic strictly increasing" \
     bash -c 'uuid --version 7 --monotonic -c 300 | awk "NR > 1 && \$0 <= prev { exit 1 } { prev = \$0 }"'
 run_fail "uuid monotonic needs v7" uuid --monotonic
