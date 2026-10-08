@@ -27,7 +27,7 @@ jobs:
     # runner's ignored SIGPIPE) should fail fast, not burn the 6-hour default.
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
 
       - name: Install lint tools (macOS)
         if: runner.os == 'macOS'
@@ -35,7 +35,9 @@ jobs:
 
       - name: Install lint tools (Linux)
         if: runner.os == 'Linux'
-        run: pipx install ruff
+        # pyright only here: its first run downloads a node runtime, which is
+        # quick on Linux but would add minutes to the scarce macOS runner.
+        run: pipx install ruff pyright
 
       - name: Lint
         run: tests/lint.sh
