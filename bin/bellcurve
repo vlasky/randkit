@@ -121,7 +121,9 @@ def inv_normal_cdf_decimal(p):
     """Inverse CDF of standard normal to arbitrary precision using Decimal.
     Uses an asymptotic initial guess refined by Newton-Raphson with arbitrary-precision
     erfc/erf."""
-    if p >= Decimal('0.5'):
+    if p == Decimal('0.5'):
+        return Decimal(0)    # reflecting 1 - p would recurse forever
+    if p > Decimal('0.5'):
         return -inv_normal_cdf_decimal(1 - p)
 
     # For small p: initial guess from asymptotic expansion
